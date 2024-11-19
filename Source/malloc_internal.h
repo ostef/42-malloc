@@ -51,9 +51,9 @@ static inline uint32_t *GetBucketBookkeepingDataPointer(AllocationBucket *bucket
     return (uint32_t *)(bucket + 1);
 }
 
-static inline int GetBucketNumBookkeepingSlots(int num_alloc)
+static inline int GetBucketNumBookkeepingSlots(int num_alloc_capacity)
 {
-    return num_alloc / sizeof(uint32_t) + (num_alloc % sizeof(uint32_t)) > 0;
+    return num_alloc_capacity / sizeof(uint32_t) + ((num_alloc_capacity % sizeof(uint32_t)) > 0);
 }
 
 AllocationBucket *CreateAllocationBucket(int alloc_size, int page_size);

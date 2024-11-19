@@ -95,27 +95,33 @@ void *OccupyFirstFreeBucketSlot(AllocationBucket *bucket)
 {
     FT_ASSERT(bucket->num_alloc < GetBucketNumAllocCapacity(bucket));
 
-    DebugLog("OccupyFirstFreeBucketSlot\n");
-
     uint32_t *bookkeeping = GetBucketBookkeepingDataPointer(bucket);
     int num_bookkeeping_slots = GetBucketNumBookkeepingSlots(GetBucketNumAllocCapacity(bucket));
     void *memory = (void *)(bookkeeping + num_bookkeeping_slots);
 
+    DebugLog("OccupyFirstFreeBucketSlot(num_alloc_capacity=%d, num_bookkeeping_slots=%d)\n",
+        GetBucketNumAllocCapacity(bucket), num_bookkeeping_slots);
+
     for (int i = 0; i < num_bookkeeping_slots; i += 1)
     {
-        int index = BitScanForward32(bookkeeping[i]);
-        if (index > 0)
+        DebugLog("%d\n", i);
+
+        int bit_index = BitScanForward32(bookkeeping[i]);
+        if (bit_index > 0)
         {
-            DebugLog("Found free slot at i=%d, bit_index=%d\n", i, index);
-            DebugLog("bookkeeping[i]=");
+            DebugLog("Found free slot at i=%d, bit_index=%d\n", i, bit_index);
+            DebugLog("bookkeeping[%d]=", i);
             DebugLogBinaryNumber(bookkeeping[i]);
             DebugLog("\n");
+            DebugLog("bookkeeping[%d], bit %d set to 0\n", i, bit_index);
 
-            index -= 1;
-            bookkeeping[i] &= ~(1 << index);
-            bucket->num_alloc += 1;
-            int alloc_index = i * sizeof(uint32_t) + index;
+            bit_index -= 1;
+            bookkeeping[i] &= ~(1 << bit_index);
+
+            int alloc_index = i * sizeof(uint32_t) + bit_index;
             FT_ASSERT(alloc_index < GetBucketNumAllocCapacity(bucket));
+
+            bucket->num_alloc += 1;
 
             return memory + alloc_index * bucket->alloc_size;
         }
