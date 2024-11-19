@@ -32,6 +32,6 @@ re: fclean all
 Tests/%: Tests/%.c $(NAME)
 	$(CC) $(C_FLAGS) $< $(NAME) -o $@.test
 	./$@.test
-	@rm -f $@.test
+	# @rm -f $@.test
 
 .PHONY: all clean fclean re

@@ -8,6 +8,10 @@
 #include <string.h>
 #include <time.h>
 
+// Most of the time is spent using mmap, and since malloc does not use mmap for
+// allocation sizes up to a certain threshold, we get beaten every time.
+// To force malloc to always use mmap, export the enviroment variable GLIBC_TUNABLES="glibc.malloc.mmap_threshold=0"
+
 void Test(
     int alloc_size,
     int N,
@@ -34,7 +38,8 @@ void Test(
     uint64_t elapsed_time = (end_time.tv_sec - start_time.tv_sec) * 1000000000 + end_time.tv_nsec - start_time.tv_nsec;
 
     const char *name = alloc_func == malloc ? "   malloc" : "ft_malloc";
-    printf("%s elapsed: %f ms\n", name, elapsed_time / 1000000.0);
+
+    printf("%s(alloc_size=%d N=%d) elapsed: %f ms\n", name, alloc_size, N, elapsed_time / 1000000.0);
 }
 
 int main()
