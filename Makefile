@@ -4,7 +4,7 @@ SRC_DIR=Source
 SRC_FILES=bucket_alloc.c malloc.c
 OBJ_DIR=Obj
 
-DEFINES?=#FT_MALLOC_DEBUG_LOG FT_MALLOC_MIN_ALLOC_CAPACITY=100
+DEFINES?=FT_MALLOC_MIN_ALLOC_CAPACITY=100 #FT_MALLOC_DEBUG_LOG
 
 OBJ_FILES=$(SRC_FILES:.c=.o)
 CC=gcc
@@ -17,7 +17,7 @@ $(OBJ_DIR)/%.o: $(SRC_DIR)/%.c malloc.h $(SRC_DIR)/malloc_internal.h Makefile
 	@mkdir -p $(dir $@)
 	$(CC) $(C_FLAGS) -c $< -o $@
 
-$(NAME): $(addprefix $(OBJ_DIR)/,$(OBJ_FILES))
+$(NAME): $(addprefix $(OBJ_DIR)/,$(OBJ_FILES)) Makefile
 	ar rcs $@ $(addprefix $(OBJ_DIR)/,$(OBJ_FILES))
 
 clean:
