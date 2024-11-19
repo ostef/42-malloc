@@ -45,7 +45,6 @@ void Test(
 
 int main()
 {
-
     Test(10, 10000, malloc, free, realloc);
     Test(10, 10000, Allocate, Free, ResizeAllocation);
 
@@ -57,5 +56,4 @@ int main()
 
     Test(1000, 10000, malloc, free, realloc);
     Test(1000, 10000, Allocate, Free, ResizeAllocation);
-
 }
