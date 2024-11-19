@@ -63,9 +63,12 @@ AllocationBucket *CreateAllocationBucket(int alloc_size, int page_size)
 void FreeAllocationBucket(AllocationBucket *bucket)
 {
     FT_ASSERT(bucket != NULL);
-    FT_ASSERT(bucket->num_alloc == 0);
+    FT_ASSERT(bucket->num_alloc == 0 && "Freeing non empty allocation bucket");
 
     ListNodePop((ListNode **)&g_bucket_list, &bucket->node);
+
+    DebugLog("Freed allocation bucket: alloc_size=%d, page_size=%d, num_alloc_capacity=%d\n",
+        bucket->alloc_size, bucket->total_page_size, GetBucketNumAllocCapacity(bucket));
 
     munmap(bucket, (size_t)bucket->total_page_size);
 }
