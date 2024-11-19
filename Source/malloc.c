@@ -18,7 +18,6 @@
 
 void *Allocate(size_t size)
 {
-    FT_ASSERT(false && "Assert test");
     return AllocFromBucket(size);
 }
 
