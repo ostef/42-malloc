@@ -19,7 +19,9 @@
         __builtin_trap(); \
     } } while(0)
 
-// #define FT_MALLOC_MIN_ALLOC_CAPACITY 100
+#ifndef FT_MALLOC_MIN_ALLOC_CAPACITY
+#define FT_MALLOC_MIN_ALLOC_CAPACITY 100
+#endif
 
 #ifdef FT_MALLOC_DEBUG_LOG
 #define DebugLog(...) printf(__VA_ARGS__)
