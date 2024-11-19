@@ -32,6 +32,13 @@ AllocationBucket *CreateAllocationBucket(int alloc_size, int page_size)
     // Align page size to system page size
     page_size = g_mmap_page_size * (page_size / g_mmap_page_size + 1);
 
+    #ifdef FT_MALLOC_MIN_ALLOC_CAPACITY
+    while (GetBucketNumAllocCapacityBeforehand(page_size, alloc_size) < FT_MALLOC_MIN_ALLOC_CAPACITY)
+    {
+        page_size += g_mmap_page_size;
+    }
+    #endif
+
     void *ptr = mmap(NULL, page_size, PROT_WRITE | PROT_READ, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
     if (!ptr || ptr == MAP_FAILED)
         return NULL;
@@ -47,7 +54,8 @@ AllocationBucket *CreateAllocationBucket(int alloc_size, int page_size)
     size_t bookkeeping_size = GetBucketNumBookkeepingSlots(GetBucketNumAllocCapacity(bucket)) * sizeof(uint32_t);
     memset(bookkeeping, 0xffffffff, bookkeeping_size);
 
-    DebugLog("Created allocation bucket: alloc_size=%d, page_size=%d\n", alloc_size, page_size);
+    DebugLog("Created allocation bucket: alloc_size=%d, page_size=%d, num_alloc_capacity=%d\n",
+        alloc_size, page_size, GetBucketNumAllocCapacity(bucket));
 
     return bucket;
 }
@@ -62,17 +70,22 @@ void FreeAllocationBucket(AllocationBucket *bucket)
     munmap(bucket, (size_t)bucket->total_page_size);
 }
 
-int GetBucketNumAllocCapacity(AllocationBucket *bucket)
+int GetBucketNumAllocCapacityBeforehand(int total_page_size, int alloc_size)
 {
-    int avail_without_bucket = bucket->total_page_size - sizeof(AllocationBucket);
-    int num_alloc = (int)(avail_without_bucket / (bucket->alloc_size + 1.0 / sizeof(uint32_t)));
+    int avail_without_bucket = total_page_size - sizeof(AllocationBucket);
+    int num_alloc = (int)(avail_without_bucket / (alloc_size + 1.0 / sizeof(uint32_t)));
 
-    while (sizeof(AllocationBucket) + GetBucketNumBookkeepingSlots(num_alloc) + num_alloc * bucket->alloc_size > bucket->total_page_size)
+    while ((int)sizeof(AllocationBucket) + GetBucketNumBookkeepingSlots(num_alloc) + num_alloc * alloc_size > total_page_size)
     {
         num_alloc -= 1;
     }
 
-    return (int)num_alloc;
+    return num_alloc;
+}
+
+int GetBucketNumAllocCapacity(AllocationBucket *bucket)
+{
+    return GetBucketNumAllocCapacityBeforehand(bucket->total_page_size, bucket->alloc_size);
 }
 
 void *OccupyFirstFreeBucketSlot(AllocationBucket *bucket)

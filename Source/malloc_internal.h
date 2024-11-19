@@ -9,6 +9,8 @@
 #include <sys/mman.h>
 #include <unistd.h>
 
+// #define FT_MALLOC_MIN_ALLOC_CAPACITY 100
+
 #ifdef FT_MALLOC_DEBUG_LOG
 #define DebugLog(...) printf(__VA_ARGS__)
 #else
@@ -46,6 +48,8 @@ static inline int GetBucketNumBookkeepingSlots(int num_alloc)
 
 AllocationBucket *CreateAllocationBucket(int alloc_size, int page_size);
 void FreeAllocationBucket(AllocationBucket *bucket);
+
+int GetBucketNumAllocCapacityBeforehand(int total_page_size, int alloc_size);
 int GetBucketNumAllocCapacity(AllocationBucket *bucket);
 
 void *OccupyFirstFreeBucketSlot(AllocationBucket *bucket);
