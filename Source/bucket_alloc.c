@@ -23,8 +23,8 @@ static inline void DebugLogBinaryNumber(uint32_t x)
 
 AllocationBucket *CreateAllocationBucket(int alloc_size, int page_size)
 {
-    assert(alloc_size > 0);
-    assert(page_size > 0);
+    FT_ASSERT(alloc_size > 0);
+    FT_ASSERT(page_size > 0);
 
     if (g_mmap_page_size <= 0)
         g_mmap_page_size = sysconf(_SC_PAGESIZE);
@@ -62,8 +62,8 @@ AllocationBucket *CreateAllocationBucket(int alloc_size, int page_size)
 
 void FreeAllocationBucket(AllocationBucket *bucket)
 {
-    assert(bucket != NULL);
-    assert(bucket->num_alloc == 0);
+    FT_ASSERT(bucket != NULL);
+    FT_ASSERT(bucket->num_alloc == 0);
 
     ListNodePop((ListNode **)&g_bucket_list, &bucket->node);
 
@@ -90,7 +90,7 @@ int GetBucketNumAllocCapacity(AllocationBucket *bucket)
 
 void *OccupyFirstFreeBucketSlot(AllocationBucket *bucket)
 {
-    assert(bucket->num_alloc < GetBucketNumAllocCapacity(bucket));
+    FT_ASSERT(bucket->num_alloc < GetBucketNumAllocCapacity(bucket));
 
     DebugLog("OccupyFirstFreeBucketSlot\n");
 
@@ -112,13 +112,13 @@ void *OccupyFirstFreeBucketSlot(AllocationBucket *bucket)
             bookkeeping[i] &= ~(1 << index);
             bucket->num_alloc += 1;
             int alloc_index = i * sizeof(uint32_t) + index;
-            assert(alloc_index < GetBucketNumAllocCapacity(bucket));
+            FT_ASSERT(alloc_index < GetBucketNumAllocCapacity(bucket));
 
             return memory + alloc_index * bucket->alloc_size;
         }
     }
 
-    assert(false && "Code path should be unreachable");
+    FT_ASSERT(false && "Code path should be unreachable");
 
     return NULL;
 }
@@ -142,13 +142,13 @@ int GetPointerBucketAllocIndex(AllocationBucket *bucket, void *ptr)
 void FreeBucketSlot(AllocationBucket *bucket, void *ptr)
 {
     int alloc_index = GetPointerBucketAllocIndex(bucket, ptr);
-    assert(alloc_index >= 0 && "Pointer was not allocated from this bucket");
+    FT_ASSERT(alloc_index >= 0 && "Pointer was not allocated from this bucket");
     int slot_index = alloc_index / sizeof(uint32_t);
     int bit_index = alloc_index % sizeof(uint32_t);
 
     uint32_t *bookkeeping = GetBucketBookkeepingDataPointer(bucket);
     bool is_already_free = (bookkeeping[slot_index] >> bit_index) & 1;
-    assert(!is_already_free && "Freeing memory that has already been freed or was never allocated");
+    FT_ASSERT(!is_already_free && "Freeing memory that has already been freed or was never allocated");
     bookkeeping[slot_index] |= 1 << bit_index;
 }
 
@@ -220,7 +220,7 @@ void FreeFromBucket(void *ptr)
     DebugLog("AllocFromBucket(%p)\n", ptr);
 
     AllocationBucket *bucket = GetAllocationBucketOfPointer(ptr);
-    assert(bucket != NULL && "Free: Invalid pointer");
+    FT_ASSERT(bucket != NULL && "Free: Invalid pointer");
 
     FreeBucketSlot(bucket, ptr);
 }
@@ -230,7 +230,7 @@ void *ReallocFromBucket(void *ptr, size_t new_size)
     DebugLog("AllocFromBucket(%p, %lu)\n", ptr, new_size);
 
     AllocationBucket *bucket = GetAllocationBucketOfPointer(ptr);
-    assert(bucket != NULL);
+    FT_ASSERT(bucket != NULL);
 
     new_size = AlignToNextPowerOfTwo(new_size);
     if (new_size < 32)

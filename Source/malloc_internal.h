@@ -9,6 +9,16 @@
 #include <sys/mman.h>
 #include <unistd.h>
 
+#define FT_STRINGIFY(x) FT_STRINGIFY2(x)
+#define FT_STRINGIFY2(x) #x
+#define FT_LINE_STR FT_STRINGIFY(__LINE__)
+
+#define FT_ASSERT_MSG(expr, line) __FILE__ ":" line ", assertion failed: " #expr "\n"
+#define FT_ASSERT(expr) do { if (!(expr)) { \
+        write(2, FT_ASSERT_MSG(expr, FT_LINE_STR), sizeof(FT_ASSERT_MSG(expr, FT_LINE_STR))); \
+        __builtin_trap(); \
+    } } while(0)
+
 // #define FT_MALLOC_MIN_ALLOC_CAPACITY 100
 
 #ifdef FT_MALLOC_DEBUG_LOG

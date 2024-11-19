@@ -18,6 +18,7 @@
 
 void *Allocate(size_t size)
 {
+    FT_ASSERT(false && "Assert test");
     return AllocFromBucket(size);
 }
 
@@ -52,8 +53,8 @@ void *realloc(void *ptr, size_t new_size)
 
 void ListNodeInsertAfter(ListNode *node, ListNode *after)
 {
-    assert(node->prev == NULL);
-    assert(node->next == NULL);
+    FT_ASSERT(node->prev == NULL);
+    FT_ASSERT(node->next == NULL);
 
     ListNode *next = after->next;
     if (next)
@@ -68,8 +69,8 @@ void ListNodeInsertAfter(ListNode *node, ListNode *after)
 
 void ListNodeInsertBefore(ListNode *node, ListNode *before)
 {
-    assert(node->prev == NULL);
-    assert(node->next == NULL);
+    FT_ASSERT(node->prev == NULL);
+    FT_ASSERT(node->next == NULL);
 
     ListNode *prev = before->prev;
     if (prev)
@@ -84,8 +85,8 @@ void ListNodeInsertBefore(ListNode *node, ListNode *before)
 
 void ListNodePushFront(ListNode **list_front, ListNode *node)
 {
-    assert(node->prev == NULL);
-    assert(node->next == NULL);
+    FT_ASSERT(node->prev == NULL);
+    FT_ASSERT(node->next == NULL);
 
     if (*list_front)
     {
@@ -109,7 +110,7 @@ void ListNodePop(ListNode **list_front, ListNode *node)
 
     if (*list_front == node)
     {
-        assert(prev == NULL);
+        FT_ASSERT(prev == NULL);
         *list_front = next;
     }
 
