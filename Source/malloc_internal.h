@@ -96,4 +96,13 @@ static inline int BitScanForward64(uint64_t value)
     return __builtin_ffsll(value);
 }
 
+static inline void *AlignPointer(void *ptr, int align)
+{
+    uint64_t addr = (uint64_t)ptr;
+    if ((addr & align) != 0)
+        addr = (addr + (align - 1)) & -align;
+
+    return (void *)addr;
+}
+
 #endif
