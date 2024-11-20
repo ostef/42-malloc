@@ -152,17 +152,12 @@ void *ReallocBig(void *ptr, size_t new_size);
 
 void PrintBigAllocationState();
 
-static inline uint32_t AlignToNextPowerOfTwo(uint32_t x)
+static inline uint64_t Align64BitNumberToNextPowerOfTwo(uint64_t x)
 {
-    x -= 1;
-    x |= x >> 1;
-    x |= x >> 2;
-    x |= x >> 4;
-    x |= x >> 8;
-    x |= x >> 16;
-    x += 1;
+    if (x == 0)
+        return 0;
 
-    return x;
+    return 1ULL << (sizeof(uint64_t) * 8 - __builtin_clzll(x - 1));
 }
 
 static inline int BitScanForward32(uint32_t value)
