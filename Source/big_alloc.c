@@ -1,3 +1,5 @@
+#include <stdio.h>
+
 #include "malloc_internal.h"
 
 // Big allocations are directly made using mmap, and recorded as a linked list
@@ -68,4 +70,33 @@ void *ReallocBig(void *ptr, size_t new_size)
     FreeBig(ptr);
 
     return new_ptr;
+}
+
+void PrintBigAllocationState()
+{
+    EnsureInitialized();
+
+    int total_num_allocations = 0;
+    size_t total_num_allocated_bytes = 0;
+    BigAllocationHeader *alloc = g_alloc_list;
+    while (alloc)
+    {
+        total_num_allocations += 1;
+        total_num_allocated_bytes += alloc->size;
+        alloc = (BigAllocationHeader *)alloc->node.next;
+    }
+
+    printf("Total number of allocations: %d, %lu bytes\n", total_num_allocations, total_num_allocated_bytes);
+    alloc = g_alloc_list;
+    while (alloc)
+    {
+        size_t total_size = alloc->size + sizeof(BigAllocationHeader);
+        int page_count = total_size / g_mmap_page_size + (total_size % g_mmap_page_size) != 0;
+        printf(
+            "Allocation(%p): %lu bytes, using %d pages\n",
+            alloc + 1, alloc->size, page_count
+        );
+
+        alloc = (BigAllocationHeader *)alloc->node.next;
+    }
 }

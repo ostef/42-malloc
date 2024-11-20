@@ -50,10 +50,72 @@ typedef struct ListNode
     struct ListNode *next;
 } ListNode;
 
-void ListNodeInsertAfter(ListNode *node, ListNode *after);
-void ListNodeInsertBefore(ListNode *node, ListNode *before);
-void ListNodePushFront(ListNode **list_front, ListNode *node);
-void ListNodePop(ListNode **list_front, ListNode *node);
+static inline void ListNodeInsertAfter(ListNode *node, ListNode *after)
+{
+    Assert(node->prev == NULL);
+    Assert(node->next == NULL);
+
+    ListNode *next = after->next;
+    if (next)
+    {
+        next->prev = node;
+        node->next = next;
+    }
+
+    node->prev = after;
+    after->next = node;
+}
+
+static inline void ListNodeInsertBefore(ListNode *node, ListNode *before)
+{
+    Assert(node->prev == NULL);
+    Assert(node->next == NULL);
+
+    ListNode *prev = before->prev;
+    if (prev)
+    {
+        prev->next = node;
+        node->prev = prev;
+    }
+
+    node->next = before;
+    before->prev = node;
+}
+
+static inline void ListNodePushFront(ListNode **list_front, ListNode *node)
+{
+    Assert(node->prev == NULL);
+    Assert(node->next == NULL);
+
+    if (*list_front)
+    {
+        node->next = *list_front;
+        (*list_front)->prev = node;
+    }
+
+    *list_front = node;
+}
+
+static inline void ListNodePop(ListNode **list_front, ListNode *node)
+{
+    ListNode *prev = node->prev;
+    ListNode *next = node->next;
+
+    if (prev)
+        prev->next = next;
+
+    if (next)
+        next->prev = prev;
+
+    if (*list_front == node)
+    {
+        Assert(prev == NULL);
+        *list_front = next;
+    }
+
+    node->prev = NULL;
+    node->next = NULL;
+}
 
 typedef struct
 {
@@ -90,6 +152,8 @@ void *AllocFromBucket(size_t size);
 void FreeFromBucket(void *ptr);
 void *ReallocFromBucket(void *ptr, size_t new_size);
 
+void PrintBucketAllocationState();
+
 typedef struct
 {
     ListNode node;
@@ -100,6 +164,8 @@ bool IsBigAllocation(void *ptr);
 void *AllocBig(size_t size);
 void FreeBig(void *ptr);
 void *ReallocBig(void *ptr, size_t new_size);
+
+void PrintBigAllocationState();
 
 static inline uint32_t AlignToNextPowerOfTwo(uint32_t x)
 {

@@ -16,4 +16,6 @@ void *Allocate(size_t size);
 void Free(void *ptr);
 void *ResizeAllocation(void *ptr, size_t new_size);
 
+void PrintAllocationState();
+
 #endif

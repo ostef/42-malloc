@@ -63,6 +63,9 @@ int main()
     Test(10000, 10000, malloc, free, realloc);
     Test(10000, 10000, Allocate, Free, ResizeAllocation);
 
-    Test(100000, 10000, malloc, free, realloc);
-    Test(100000, 10000, Allocate, Free, ResizeAllocation);
+    Test(100000, 10, malloc, free, realloc);
+    Test(100000, 10, Allocate, Free, ResizeAllocation);
+
+    printf("\n");
+    PrintAllocationState();
 }

@@ -1,4 +1,7 @@
+// @Todo: store buckets in linked list per size class
+
 #include <stdlib.h>
+#include <stdio.h>
 #include <stdio.h>
 
 #include "malloc_internal.h"
@@ -247,4 +250,33 @@ void *ReallocFromBucket(void *ptr, size_t new_size)
     FreeBucketSlot(bucket, ptr);
 
     return new_ptr;
+}
+
+void PrintBucketAllocationState()
+{
+    EnsureInitialized();
+
+    int total_num_buckets = 0;
+    int total_num_allocations = 0;
+    size_t total_num_allocated_bytes = 0;
+    AllocationBucket *bucket = g_bucket_list;
+    while (bucket)
+    {
+        total_num_buckets += 1;
+        total_num_allocations += bucket->num_alloc;
+        total_num_allocated_bytes += bucket->num_alloc * bucket->alloc_size;
+        bucket = (AllocationBucket *)bucket->node.next;
+    }
+
+    printf("Total number of buckets: %d\n", total_num_buckets);
+    printf("Total number of allocations: %d, %lu bytes\n", total_num_allocations, total_num_allocated_bytes);
+    bucket = g_bucket_list;
+    while (bucket)
+    {
+        printf(
+            "Bucket(%p): alloc_size=%lu, total_page_size=%lu, num_alloc=%lu, num_alloc_capacity=%lu, num_allocated_bytes=%lu\n",
+            bucket, bucket->alloc_size, bucket->total_page_size, bucket->num_alloc, GetBucketNumAllocCapacity(bucket), bucket->num_alloc * bucket->alloc_size
+        );
+        bucket = (AllocationBucket *)bucket->node.next;
+    }
 }
