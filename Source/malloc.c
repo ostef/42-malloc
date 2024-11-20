@@ -74,6 +74,12 @@ void *realloc(void *ptr, size_t new_size)
 
 #endif
 
+void CleanupAllocations()
+{
+    CleanupBucketAllocations();
+    CleanupBigAllocations();
+}
+
 // @Todo: replace printf (we're supposed to replace malloc, it would be
 // weird to use functions that use malloc)
 // Also we don't want to depend on stdio.h

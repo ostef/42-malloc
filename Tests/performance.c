@@ -68,4 +68,5 @@ int main()
 
     printf("\n");
     PrintAllocationState();
+    CleanupAllocations();
 }

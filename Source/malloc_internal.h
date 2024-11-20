@@ -20,6 +20,13 @@
         __builtin_trap(); \
     } } while(0)
 
+#ifdef FT_MALLOC_DEBUG_LOG
+#include <stdio.h>
+#define DebugLog(...) printf(__VA_ARGS__)
+#else
+#define DebugLog(...)
+#endif
+
 extern size_t g_mmap_page_size;
 
 void EnsureInitialized();
@@ -136,6 +143,7 @@ AllocationBucket *GetAvailableAllocationBucketForSize(size_t size);
 void *AllocFromBucket(size_t size);
 void FreeFromBucket(void *ptr);
 void *ReallocFromBucket(void *ptr, size_t new_size);
+void CleanupBucketAllocations();
 
 void PrintBucketAllocationState();
 
@@ -149,6 +157,7 @@ bool IsBigAllocation(void *ptr);
 void *AllocBig(size_t size);
 void FreeBig(void *ptr);
 void *ReallocBig(void *ptr, size_t new_size);
+void CleanupBigAllocations();
 
 void PrintBigAllocationState();
 

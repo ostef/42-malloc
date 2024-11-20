@@ -4,6 +4,7 @@
 #include <stddef.h>
 
 #define FT_MALLOC_MIN_SIZE 32
+// This is not a concrete limit, just an ideal virtual limit
 #define FT_MALLOC_MAX_SIZE 0x7ffffffffffffff0
 
 // If the allocation size goes beyong this many pages, we'll stop using buckets
@@ -19,13 +20,6 @@
 #define FT_MALLOC_MIN_ALLOC_CAPACITY 100
 #endif
 
-#ifdef FT_MALLOC_DEBUG_LOG
-#include <stdio.h>
-#define DebugLog(...) printf(__VA_ARGS__)
-#else
-#define DebugLog(...)
-#endif
-
 #ifdef FT_MALLOC_OVERRIDE_LIBC_MALLOC
 void *malloc(size_t size);
 void free(void *ptr);
@@ -38,6 +32,7 @@ void *realloc(void *ptr, size_t new_size);
 void *Allocate(size_t size);
 void Free(void *ptr);
 void *ResizeAllocation(void *ptr, size_t new_size);
+void CleanupAllocations();
 
 void PrintAllocationState();
 

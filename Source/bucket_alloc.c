@@ -68,6 +68,15 @@ void FreeAllocationBucket(AllocationBucket *bucket)
     munmap(bucket, (size_t)bucket->total_page_size);
 }
 
+void CleanupBucketAllocations()
+{
+    while (g_bucket_list)
+    {
+        g_bucket_list->num_alloc = 0;
+        FreeAllocationBucket(g_bucket_list);
+    }
+}
+
 size_t GetBucketNumAllocCapacityBeforehand(size_t total_page_size, size_t alloc_size)
 {
     size_t avail_without_bucket = total_page_size - sizeof(AllocationBucket);

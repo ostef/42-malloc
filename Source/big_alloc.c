@@ -72,6 +72,14 @@ void *ReallocBig(void *ptr, size_t new_size)
     return new_ptr;
 }
 
+void CleanupBigAllocations()
+{
+    while (g_alloc_list)
+    {
+        FreeBig(g_alloc_list + 1);
+    }
+}
+
 void PrintBigAllocationState()
 {
     EnsureInitialized();

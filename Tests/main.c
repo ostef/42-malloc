@@ -62,5 +62,8 @@ int main()
     if (!Test(50, Allocate, Free, ResizeAllocation))
         return 1;
 
+    PrintAllocationState();
+    CleanupAllocations();
+
     return 0;
 }
