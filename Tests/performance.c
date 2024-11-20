@@ -41,7 +41,7 @@ void Test(
 
     uint64_t elapsed_time = (end_time.tv_sec - start_time.tv_sec) * 1000000000 + end_time.tv_nsec - start_time.tv_nsec;
 
-    printf("%s(alloc_size=%d N=%d) elapsed: %f ms\n", name, alloc_size, N, elapsed_time / 1000000.0);
+    printf("%s(alloc_size=%d, N=%d) elapsed: %f ms\n", name, alloc_size, N, elapsed_time / 1000000.0);
 }
 
 int main()
