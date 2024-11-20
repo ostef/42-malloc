@@ -37,7 +37,7 @@ void FreeBig(void *ptr)
 {
     DebugLog(">> FreeBig(%p)\n", ptr);
 
-    BigAllocationHeader *header = GetBigAllocPointer(ptr);
+    BigAllocationHeader *header = GetBigAllocHeader(ptr);
     ListNodePop((ListNode **)&g_alloc_list, &header->node);
 
     munmap((void *)header, header->size + sizeof(BigAllocationHeader));
@@ -47,7 +47,7 @@ void *ReallocBig(void *ptr, size_t new_size)
 {
     DebugLog(">> ReallocBig(%p, %lu)\n", ptr, new_size);
 
-    BigAllocationHeader *header = GetBigAllocPointer(ptr);
+    BigAllocationHeader *header = GetBigAllocHeader(ptr);
 
     size_t total_size = header->size + sizeof(BigAllocationHeader);
     int page_count = total_size / g_mmap_page_size + (total_size % g_mmap_page_size) != 0;
