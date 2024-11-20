@@ -9,6 +9,8 @@
 #include <sys/mman.h>
 #include <unistd.h>
 
+#include "malloc.h"
+
 // If the allocation size goes beyong this many pages, we'll stop using buckets
 // and store allocations directly in a linked list
 #ifndef FT_MALLOC_BIG_SIZE_PAGE_THRESHOLD
@@ -23,6 +25,7 @@
 #endif
 
 #ifdef FT_MALLOC_DEBUG_LOG
+#include <stdio.h>
 #define DebugLog(...) printf(__VA_ARGS__)
 #else
 #define DebugLog(...)

@@ -101,7 +101,7 @@ void *OccupyFirstFreeBucketSlot(AllocationBucket *bucket)
 
     for (size_t i = 0; i < num_bookkeeping_slots; i += 1)
     {
-        DebugLog("%lu\n", i);
+        // DebugLog("Iterating slot %lu\n", i);
 
         int bit_index = BitScanForward32(bookkeeping[i]);
         if (bit_index > 0)
@@ -207,7 +207,7 @@ AllocationBucket *GetAvailableAllocationBucketForSize(size_t size)
 
 void *AllocFromBucket(size_t size)
 {
-    DebugLog("AllocFromBucket(%lu)\n", size);
+    DebugLog(">> AllocFromBucket(%lu)\n", size);
 
     AllocationBucket *bucket = GetAvailableAllocationBucketForSize(size);
     if (!bucket)
@@ -220,7 +220,7 @@ void *AllocFromBucket(size_t size)
 
 void FreeFromBucket(void *ptr)
 {
-    DebugLog("AllocFromBucket(%p)\n", ptr);
+    DebugLog(">> FreeFromBucket(%p)\n", ptr);
 
     AllocationBucket *bucket = GetAllocationBucketOfPointer(ptr);
     Assert(bucket != NULL && "Free: Invalid pointer");
@@ -230,7 +230,7 @@ void FreeFromBucket(void *ptr)
 
 void *ReallocFromBucket(void *ptr, size_t new_size)
 {
-    DebugLog("AllocFromBucket(%p, %lu)\n", ptr, new_size);
+    DebugLog(">> ReallocFromBucket(%p, %lu)\n", ptr, new_size);
 
     AllocationBucket *bucket = GetAllocationBucketOfPointer(ptr);
     Assert(bucket != NULL);

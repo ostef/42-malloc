@@ -20,6 +20,8 @@ bool IsBigAllocation(void *ptr)
 
 void *AllocBig(size_t size)
 {
+    DebugLog(">> AllocBig(%ld)\n", size);
+
     void *ptr = mmap(NULL, size + sizeof(BigAllocationHeader), PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
 
     BigAllocationHeader *header = (BigAllocationHeader *)ptr;
@@ -33,6 +35,8 @@ void *AllocBig(size_t size)
 
 void FreeBig(void *ptr)
 {
+    DebugLog(">> FreeBig(%p)\n", ptr);
+
     ptr -= sizeof(BigAllocationHeader);
     BigAllocationHeader *header = (BigAllocationHeader *)ptr;
     ListNodePop((ListNode **)&g_alloc_list, &header->node);
@@ -42,6 +46,8 @@ void FreeBig(void *ptr)
 
 void *ReallocBig(void *ptr, size_t new_size)
 {
+    DebugLog(">> ReallocBig(%p, %lu)\n", ptr, new_size);
+
     BigAllocationHeader *header = (BigAllocationHeader *)ptr - 1;
 
     size_t total_size = header->size + sizeof(BigAllocationHeader);
@@ -51,7 +57,7 @@ void *ReallocBig(void *ptr, size_t new_size)
     int new_page_count = new_total_size / g_mmap_page_size + (new_total_size % g_mmap_page_size) != 0;
 
     // If the allocated pages are enough to store new_size bytes, just increase the recorded size and don't move the memory
-    if (new_page_count == page_count)
+    if (new_page_count <= page_count)
     {
         header->size = new_size;
         return ptr;
