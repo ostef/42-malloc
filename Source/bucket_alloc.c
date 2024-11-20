@@ -24,23 +24,17 @@ static inline void DebugLogBinaryNumber(uint32_t x)
 #define DebugLogBinaryNumber(x) (void)x
 #endif
 
-AllocationBucket *CreateAllocationBucket(size_t alloc_size, size_t page_size)
+AllocationBucket *CreateAllocationBucket(size_t alloc_size, unsigned int alloc_capacity)
 {
-    Assert(alloc_size > 0);
-    Assert(page_size > 0);
-
     // Align page size to system page size
-    page_size = g_mmap_page_size * (page_size / g_mmap_page_size + 1);
+    size_t page_size = GetRequiredSizeForBucket(alloc_size, alloc_capacity);
+    page_size = AlignToPageSize(page_size);
 
-    #ifdef FT_MALLOC_MIN_ALLOC_CAPACITY
-    while (GetBucketNumAllocCapacityBeforehand(page_size, alloc_size) < FT_MALLOC_MIN_ALLOC_CAPACITY)
-    {
-        page_size += g_mmap_page_size;
-    }
-    #endif
+    // By aligning page size we might grow how much memory the bucket has
+    // which means the alloc capacity might've increased, so we recalculate it
+    alloc_capacity = GetBucketNumAllocCapacityBeforehand(page_size, alloc_size);
 
-    void *ptr = NULL;
-    ptr = mmap(NULL, page_size, PROT_WRITE | PROT_READ, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    void *ptr = mmap(NULL, page_size, PROT_WRITE | PROT_READ, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
     if (!ptr || ptr == MAP_FAILED)
         return NULL;
 
@@ -206,7 +200,9 @@ AllocationBucket *GetAvailableAllocationBucketForSize(size_t size)
         bucket = (AllocationBucket *)bucket->node.next;
     }
 
-    return CreateAllocationBucket(size, g_mmap_page_size);
+    unsigned int alloc_capacity = FT_MALLOC_MIN_ALLOC_CAPACITY;
+
+    return CreateAllocationBucket(size, alloc_capacity);
 }
 
 void *AllocFromBucket(size_t size)

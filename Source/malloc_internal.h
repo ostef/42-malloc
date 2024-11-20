@@ -135,7 +135,12 @@ static inline size_t GetBucketNumBookkeepingSlots(size_t num_alloc_capacity)
     return num_alloc_capacity / sizeof(uint32_t) + ((num_alloc_capacity % sizeof(uint32_t)) > 0);
 }
 
-AllocationBucket *CreateAllocationBucket(size_t alloc_size, size_t page_size);
+static inline size_t GetRequiredSizeForBucket(size_t alloc_size, unsigned int alloc_capacity)
+{
+    return sizeof(AllocationBucket) + GetBucketNumBookkeepingSlots(alloc_capacity) * sizeof(uint32_t) + alloc_size * alloc_capacity;
+}
+
+AllocationBucket *CreateAllocationBucket(size_t alloc_size, unsigned int alloc_capacity);
 void FreeAllocationBucket(AllocationBucket *bucket);
 
 size_t GetBucketNumAllocCapacityBeforehand(size_t total_page_size, size_t alloc_size);
@@ -190,13 +195,21 @@ static inline int BitScanForward64(uint64_t value)
     return __builtin_ffsll(value);
 }
 
-static inline void *AlignPointer(void *ptr, int align)
+static inline void *AlignPointer(void *ptr, unsigned int align)
 {
     uint64_t addr = (uint64_t)ptr;
     if ((addr & align) != 0)
-        addr = (addr + (align - 1)) & -align;
+        addr = (addr + (align - 1)) & ~(align - 1);
 
     return (void *)addr;
+}
+
+static inline size_t AlignToPageSize(size_t x)
+{
+    if ((x & g_mmap_page_size) != 0)
+        x = (x + (g_mmap_page_size - 1)) & ~(g_mmap_page_size - 1);
+
+    return x;
 }
 
 #endif
