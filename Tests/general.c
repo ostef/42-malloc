@@ -105,7 +105,12 @@ int main()
     Test(10000, malloc, free, realloc);
     Test(10000, Allocate, Free, ResizeAllocation);
 
-    printf("\n");
-    PrintAllocationState();
+    AllocationStats stats = GetAllocationStats();
+    if (stats.num_allocations > 0 || stats.num_allocated_bytes > 0)
+    {
+        printf("Error: not all allocations were freed\n");
+        exit(1);
+    }
+
     CleanupAllocations();
 }

@@ -80,6 +80,22 @@ void CleanupBigAllocations()
     }
 }
 
+BigAllocationStats GetBigAllocationStats()
+{
+    EnsureInitialized();
+
+    BigAllocationStats stats = {};
+    BigAllocationHeader *alloc = g_alloc_list;
+    while (alloc)
+    {
+        stats.num_allocations += 1;
+        stats.num_allocated_bytes += alloc->size;
+        alloc = (BigAllocationHeader *)alloc->node.next;
+    }
+
+    return stats;
+}
+
 void PrintBigAllocationState()
 {
     EnsureInitialized();

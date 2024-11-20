@@ -34,6 +34,33 @@ void Free(void *ptr);
 void *ResizeAllocation(void *ptr, size_t new_size);
 void CleanupAllocations();
 
+typedef struct
+{
+    size_t num_buckets;
+    size_t num_allocations;
+    size_t num_allocated_bytes;
+} AllocationBucketStats;
+
+AllocationBucketStats GetBucketAllocationStats();
+
+typedef struct
+{
+    size_t num_allocations;
+    size_t num_allocated_bytes;
+} BigAllocationStats;
+
+BigAllocationStats GetBigAllocationStats();
+
+typedef struct
+{
+    AllocationBucketStats bucket_stats;
+    BigAllocationStats big_alloc_stats;
+    size_t num_allocations;
+    size_t num_allocated_bytes;
+} AllocationStats;
+
+AllocationStats GetAllocationStats();
+
 void PrintAllocationState();
 
 #endif

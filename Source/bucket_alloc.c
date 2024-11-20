@@ -297,6 +297,23 @@ void *ReallocFromBucket(void *ptr, size_t new_size)
     return new_ptr;
 }
 
+AllocationBucketStats GetBucketAllocationStats()
+{
+    EnsureInitialized();
+
+    AllocationBucketStats stats = {};
+    AllocationBucket *bucket = g_bucket_list;
+    while (bucket)
+    {
+        stats.num_buckets += 1;
+        stats.num_allocations += bucket->num_alloc;
+        stats.num_allocated_bytes += bucket->num_alloc * bucket->alloc_size;
+        bucket = (AllocationBucket *)bucket->node.next;
+    }
+
+    return stats;
+}
+
 void PrintBucketAllocationState()
 {
     EnsureInitialized();

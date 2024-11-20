@@ -80,6 +80,19 @@ void CleanupAllocations()
     CleanupBigAllocations();
 }
 
+AllocationStats GetAllocationStats()
+{
+    AllocationStats stats = {};
+    stats.bucket_stats = GetBucketAllocationStats();
+    stats.big_alloc_stats = GetBigAllocationStats();
+    stats.num_allocations = stats.bucket_stats.num_allocations
+        + stats.big_alloc_stats.num_allocations;
+    stats.num_allocated_bytes = stats.bucket_stats.num_allocated_bytes
+        + stats.big_alloc_stats.num_allocated_bytes;
+
+    return stats;
+}
+
 // @Todo: replace printf (we're supposed to replace malloc, it would be
 // weird to use functions that use malloc)
 // Also we don't want to depend on stdio.h

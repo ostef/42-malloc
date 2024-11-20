@@ -67,6 +67,6 @@ int main()
     Test(100000, 10, Allocate, Free, ResizeAllocation);
 
     printf("\n");
-    PrintAllocationState();
+    // PrintAllocationState();
     CleanupAllocations();
 }
