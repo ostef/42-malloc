@@ -1,4 +1,5 @@
 // @Todo: store buckets in linked list per size class
+// @Todo: use heuristics to know how big buckets should be
 
 #include <stdlib.h>
 #include <stdio.h>
