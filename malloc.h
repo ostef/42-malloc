@@ -3,6 +3,8 @@
 
 #include <stddef.h>
 
+#define FT_MALLOC_ALIGNMENT 16
+
 #define FT_MALLOC_MIN_SIZE 32
 // This is not a concrete limit, just an ideal virtual limit
 #define FT_MALLOC_MAX_SIZE 0x7ffffffffffffff0
