@@ -105,3 +105,8 @@ void PrintAllocationState()
     printf("\n=== Big allocations ===\n");
     PrintBigAllocationState();
 }
+
+void show_alloc_mem()
+{
+    PrintAllocationState();
+}

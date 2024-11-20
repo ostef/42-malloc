@@ -62,5 +62,7 @@ typedef struct
 AllocationStats GetAllocationStats();
 
 void PrintAllocationState();
+// The subject requires a show_alloc_mem function
+void show_alloc_mem();
 
 #endif
