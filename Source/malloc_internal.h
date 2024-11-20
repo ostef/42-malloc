@@ -136,8 +136,8 @@ size_t GetBucketNumAllocCapacity(AllocationBucket *bucket);
 void *OccupyFirstFreeBucketSlot(AllocationBucket *bucket);
 void FreeBucketSlot(AllocationBucket *bucket, void *ptr);
 
-bool PointerBelongsToBucket(void *ptr, AllocationBucket *bucket);
-AllocationBucket *GetAllocationBucketOfPointer(void *ptr);
+bool PointerBelongsToBucket(void *ptr, AllocationBucket *bucket, bool *already_freed);
+AllocationBucket *GetAllocationBucketOfPointer(void *ptr, bool *already_freed);
 AllocationBucket *GetAvailableAllocationBucketForSize(size_t size);
 
 void *AllocFromBucket(size_t size);
