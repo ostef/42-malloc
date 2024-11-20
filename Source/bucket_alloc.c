@@ -36,17 +36,7 @@ AllocationBucket *CreateAllocationBucket(size_t alloc_size, size_t page_size)
     #endif
 
     void *ptr = NULL;
-    bool use_mmap = true;
-    if (use_mmap)
-    {
-        ptr = mmap(NULL, page_size, PROT_WRITE | PROT_READ, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
-    }
-    else
-    {
-        ptr = sbrk(page_size + 8);
-        ptr = AlignPointer(ptr, 8);
-    }
-
+    ptr = mmap(NULL, page_size, PROT_WRITE | PROT_READ, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
     if (!ptr || ptr == MAP_FAILED)
         return NULL;
 
