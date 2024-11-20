@@ -32,10 +32,6 @@ void *Allocate(size_t size)
     else
         result = AllocFromBucket(size);
 
-    if (((uint64_t)result % FT_MALLOC_ALIGNMENT) > 0)
-    {
-        DebugLog("%lu: pointer is not 16-byte aligned\n", (uint64_t)result % FT_MALLOC_ALIGNMENT);
-    }
     Assert(((uint64_t)result % FT_MALLOC_ALIGNMENT) == 0 && "Result pointer is not 16-byte aligned");
 
     return result;
