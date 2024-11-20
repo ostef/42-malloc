@@ -26,10 +26,19 @@ void *Allocate(size_t size)
     size_t big_size_threshold = g_mmap_page_size * FT_MALLOC_BIG_SIZE_PAGE_THRESHOLD;
     #endif
 
+    void *result = NULL;
     if (size >= big_size_threshold)
-        return AllocBig(size);
+        result = AllocBig(size);
     else
-        return AllocFromBucket(size);
+        result = AllocFromBucket(size);
+
+    if (((uint64_t)result % FT_MALLOC_ALIGNMENT) > 0)
+    {
+        DebugLog("%lu: pointer is not 16-byte aligned\n", (uint64_t)result % FT_MALLOC_ALIGNMENT);
+    }
+    Assert(((uint64_t)result % FT_MALLOC_ALIGNMENT) == 0 && "Result pointer is not 16-byte aligned");
+
+    return result;
 }
 
 void Free(void *ptr)
