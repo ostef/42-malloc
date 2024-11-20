@@ -1,37 +1,53 @@
 #include "malloc.h"
 #include "malloc_internal.h"
 
-// static void *AllocateBig(size_t size)
-// {
-//     void *ptr = mmap(NULL, size + sizeof(size_t), PROT_READ | PROT_WRITE, MAP_ANONYMOUS, -1, 0);
-//     *(size_t *)ptr = size;
+size_t g_mmap_page_size;
 
-//     return ptr + sizeof(size_t);
-// }
-
-// static void FreeBig(void *ptr)
-// {
-//     ptr -= sizeof(size_t);
-//     size_t size = *(size_t *)ptr;
-//     munmap(ptr, size);
-// }
+void EnsureInitialized()
+{
+    if (g_mmap_page_size <= 0)
+        g_mmap_page_size = sysconf(_SC_PAGESIZE);
+}
 
 void *Allocate(size_t size)
 {
-    return AllocFromBucket(size);
+    EnsureInitialized();
+
+    #ifdef FT_MALLOC_BIG_SIZE_THRESHOLD
+    Assert(FT_MALLOC_BIG_SIZE_THRESHOLD > 0 && "Invalid value for FT_MALLOC_BIG_SIZE_THRESHOLD");
+    size_t big_size_threshold = (size_t)FT_MALLOC_BIG_SIZE_THRESHOLD;
+    #else
+    Assert(FT_MALLOC_BIG_SIZE_PAGE_THRESHOLD > 0 && "Invalid value for FT_MALLOC_BIG_SIZE_PAGE_THRESHOLD");
+    size_t big_size_threshold = g_mmap_page_size * FT_MALLOC_BIG_SIZE_PAGE_THRESHOLD;
+    #endif
+
+    if (size >= big_size_threshold)
+        return AllocBig(size);
+    else
+        return AllocFromBucket(size);
 }
 
 void Free(void *ptr)
 {
-    FreeFromBucket(ptr);
+    EnsureInitialized();
+
+    if (IsBigAllocation(ptr))
+        FreeBig(ptr);
+    else
+        FreeFromBucket(ptr);
 }
 
 void *ResizeAllocation(void *ptr, size_t new_size)
 {
-    return ReallocFromBucket(ptr, new_size);
+    EnsureInitialized();
+
+    if (IsBigAllocation(ptr))
+        return ReallocBig(ptr, new_size);
+    else
+        return ReallocFromBucket(ptr, new_size);
 }
 
-#ifdef OVERRIDE_LIBC_MALLOC
+#ifdef FT_MALLOC_OVERRIDE_LIBC_MALLOC
 
 void *malloc(size_t size)
 {
@@ -52,8 +68,8 @@ void *realloc(void *ptr, size_t new_size)
 
 void ListNodeInsertAfter(ListNode *node, ListNode *after)
 {
-    FT_ASSERT(node->prev == NULL);
-    FT_ASSERT(node->next == NULL);
+    Assert(node->prev == NULL);
+    Assert(node->next == NULL);
 
     ListNode *next = after->next;
     if (next)
@@ -68,8 +84,8 @@ void ListNodeInsertAfter(ListNode *node, ListNode *after)
 
 void ListNodeInsertBefore(ListNode *node, ListNode *before)
 {
-    FT_ASSERT(node->prev == NULL);
-    FT_ASSERT(node->next == NULL);
+    Assert(node->prev == NULL);
+    Assert(node->next == NULL);
 
     ListNode *prev = before->prev;
     if (prev)
@@ -84,8 +100,8 @@ void ListNodeInsertBefore(ListNode *node, ListNode *before)
 
 void ListNodePushFront(ListNode **list_front, ListNode *node)
 {
-    FT_ASSERT(node->prev == NULL);
-    FT_ASSERT(node->next == NULL);
+    Assert(node->prev == NULL);
+    Assert(node->next == NULL);
 
     if (*list_front)
     {
@@ -109,7 +125,7 @@ void ListNodePop(ListNode **list_front, ListNode *node)
 
     if (*list_front == node)
     {
-        FT_ASSERT(prev == NULL);
+        Assert(prev == NULL);
         *list_front = next;
     }
 

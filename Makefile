@@ -1,10 +1,10 @@
 NAME=libft_malloc.a
 
 SRC_DIR=Source
-SRC_FILES=bucket_alloc.c malloc.c
+SRC_FILES=bucket_alloc.c big_alloc.c malloc.c
 OBJ_DIR=Obj
 
-DEFINES?=FT_MALLOC_MIN_ALLOC_CAPACITY=100 #FT_MALLOC_DEBUG_LOG
+DEFINES?=#FT_MALLOC_DEBUG_LOG
 
 OBJ_FILES=$(SRC_FILES:.c=.o)
 CC=gcc

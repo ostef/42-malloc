@@ -7,6 +7,7 @@
 #include <errno.h>
 #include <string.h>
 #include <time.h>
+#include <unistd.h>
 
 void Test(
     int alloc_size,
@@ -45,6 +46,8 @@ void Test(
 
 int main()
 {
+    printf("Page size: %ld\n", sysconf(_SC_PAGESIZE));
+
     Test(10, 10000, malloc, free, realloc);
     Test(10, 10000, Allocate, Free, ResizeAllocation);
 
@@ -56,4 +59,10 @@ int main()
 
     Test(1000, 10000, malloc, free, realloc);
     Test(1000, 10000, Allocate, Free, ResizeAllocation);
+
+    Test(10000, 10000, malloc, free, realloc);
+    Test(10000, 10000, Allocate, Free, ResizeAllocation);
+
+    Test(100000, 10000, malloc, free, realloc);
+    Test(100000, 10000, Allocate, Free, ResizeAllocation);
 }

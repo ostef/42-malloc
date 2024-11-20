@@ -9,15 +9,14 @@
 #include <sys/mman.h>
 #include <unistd.h>
 
-#define FT_STRINGIFY(x) FT_STRINGIFY2(x)
-#define FT_STRINGIFY2(x) #x
-#define FT_LINE_STR FT_STRINGIFY(__LINE__)
+// If the allocation size goes beyong this many pages, we'll stop using buckets
+// and store allocations directly in a linked list
+#ifndef FT_MALLOC_BIG_SIZE_PAGE_THRESHOLD
+#define FT_MALLOC_BIG_SIZE_PAGE_THRESHOLD 4
+#endif
 
-#define FT_ASSERT_MSG(expr, line) __FILE__ ":" line ", assertion failed: " #expr "\n"
-#define FT_ASSERT(expr) do { if (!(expr)) { \
-        write(2, FT_ASSERT_MSG(expr, FT_LINE_STR), sizeof(FT_ASSERT_MSG(expr, FT_LINE_STR))); \
-        __builtin_trap(); \
-    } } while(0)
+// Same as above but you can directly control how many bytes the threshold is
+// #define FT_MALLOC_BIG_SIZE_THRESHOLD (4096 * 4)
 
 #ifndef FT_MALLOC_MIN_ALLOC_CAPACITY
 #define FT_MALLOC_MIN_ALLOC_CAPACITY 100
@@ -28,6 +27,19 @@
 #else
 #define DebugLog(...)
 #endif
+
+#define Stringify(x) Stringify2(x)
+#define Stringify2(x) #x
+
+#define AssertMsg(expr, line) __FILE__ ":" line ", assertion failed: " #expr "\n"
+#define Assert(expr) do { if (!(expr)) { \
+        write(2, AssertMsg(expr, Stringify(__LINE__)), sizeof(AssertMsg(expr, Stringify(__LINE__)))); \
+        __builtin_trap(); \
+    } } while(0)
+
+extern size_t g_mmap_page_size;
+
+void EnsureInitialized();
 
 typedef struct ListNode
 {
@@ -43,9 +55,9 @@ void ListNodePop(ListNode **list_front, ListNode *node);
 typedef struct
 {
     ListNode node;
-    uint16_t total_page_size;
-    uint16_t num_alloc;
-    uint16_t alloc_size;
+    size_t total_page_size;
+    size_t num_alloc;
+    size_t alloc_size;
 } AllocationBucket;
 
 static inline uint32_t *GetBucketBookkeepingDataPointer(AllocationBucket *bucket)
@@ -53,16 +65,16 @@ static inline uint32_t *GetBucketBookkeepingDataPointer(AllocationBucket *bucket
     return (uint32_t *)(bucket + 1);
 }
 
-static inline int GetBucketNumBookkeepingSlots(int num_alloc_capacity)
+static inline size_t GetBucketNumBookkeepingSlots(size_t num_alloc_capacity)
 {
     return num_alloc_capacity / sizeof(uint32_t) + ((num_alloc_capacity % sizeof(uint32_t)) > 0);
 }
 
-AllocationBucket *CreateAllocationBucket(int alloc_size, int page_size);
+AllocationBucket *CreateAllocationBucket(size_t alloc_size, size_t page_size);
 void FreeAllocationBucket(AllocationBucket *bucket);
 
-int GetBucketNumAllocCapacityBeforehand(int total_page_size, int alloc_size);
-int GetBucketNumAllocCapacity(AllocationBucket *bucket);
+size_t GetBucketNumAllocCapacityBeforehand(size_t total_page_size, size_t alloc_size);
+size_t GetBucketNumAllocCapacity(AllocationBucket *bucket);
 
 void *OccupyFirstFreeBucketSlot(AllocationBucket *bucket);
 void FreeBucketSlot(AllocationBucket *bucket, void *ptr);
@@ -74,6 +86,17 @@ AllocationBucket *GetAvailableAllocationBucketForSize(size_t size);
 void *AllocFromBucket(size_t size);
 void FreeFromBucket(void *ptr);
 void *ReallocFromBucket(void *ptr, size_t new_size);
+
+typedef struct
+{
+    ListNode node;
+    size_t size;
+} BigAllocationHeader;
+
+bool IsBigAllocation(void *ptr);
+void *AllocBig(size_t size);
+void FreeBig(void *ptr);
+void *ReallocBig(void *ptr, size_t new_size);
 
 static inline uint32_t AlignToNextPowerOfTwo(uint32_t x)
 {
