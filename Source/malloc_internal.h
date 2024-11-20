@@ -119,7 +119,9 @@ static inline uint32_t *GetBucketBookkeepingDataPointer(AllocationBucket *bucket
 
 static inline size_t GetBucketNumBookkeepingSlots(size_t num_alloc_capacity)
 {
-    return num_alloc_capacity / sizeof(uint32_t) + ((num_alloc_capacity % sizeof(uint32_t)) > 0);
+    size_t num_bytes = num_alloc_capacity / 8 + (num_alloc_capacity % 8 > 0);
+    size_t num_slots = num_bytes / sizeof(uint32_t) + (num_bytes % sizeof(uint32_t) > 0);
+
 }
 
 static inline size_t GetRequiredSizeForBucket(size_t alloc_size, unsigned int alloc_capacity)
