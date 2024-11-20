@@ -10,6 +10,12 @@ OBJ_FILES=$(SRC_FILES:.c=.o)
 CC=gcc
 C_FLAGS=-Wall -Wextra -Werror -ggdb -I. $(addprefix -D,$(DEFINES))
 
+# We cannot enable optimizations for tests because calls to
+# malloc would be stripped away in many circumstances
+TEST_C_FLAGS:=$(C_FLAGS)
+
+C_FLAGS:=$(C_FLAGS) -O3
+
 all: $(NAME)
 
 .PRECIOUS: $(OBJ_DIR)/%.o
@@ -25,12 +31,13 @@ clean:
 
 fclean: clean
 	rm -f $(NAME)
+	rm -f Tests/*.test
 
 re: fclean all
 
 # .PRECIOUS: Tests/%
 Tests/%: Tests/%.c $(NAME)
-	$(CC) $(C_FLAGS) $< $(NAME) -o $@.test
+	$(CC) $(TEST_C_FLAGS) $< $(NAME) -o $@.test
 	./$@.test
 	# @rm -f $@.test
 
