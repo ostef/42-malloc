@@ -35,10 +35,9 @@ fclean: clean
 
 re: fclean all
 
-# .PRECIOUS: Tests/%
+.PRECIOUS: Tests/%
 Tests/%: Tests/%.c $(NAME)
 	$(CC) $(TEST_C_FLAGS) $< $(NAME) -o $@.test
 	./$@.test
-	# @rm -f $@.test
 
 .PHONY: all clean fclean re
