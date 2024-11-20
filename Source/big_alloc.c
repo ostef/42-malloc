@@ -11,7 +11,7 @@ bool IsBigAllocation(void *ptr)
     BigAllocationHeader *alloc = g_alloc_list;
     while (alloc)
     {
-        if (ptr == (void *)(alloc + 1))
+        if (ptr == GetBigAllocPointer(alloc))
             return true;
 
         alloc = (BigAllocationHeader *)alloc->node.next;
@@ -30,27 +30,24 @@ void *AllocBig(size_t size)
     header->size = size;
     ListNodePushFront((ListNode **)&g_alloc_list, &header->node);
 
-    ptr += sizeof(BigAllocationHeader);
-
-    return ptr;
+    return GetBigAllocPointer(header);
 }
 
 void FreeBig(void *ptr)
 {
     DebugLog(">> FreeBig(%p)\n", ptr);
 
-    ptr -= sizeof(BigAllocationHeader);
-    BigAllocationHeader *header = (BigAllocationHeader *)ptr;
+    BigAllocationHeader *header = GetBigAllocPointer(ptr);
     ListNodePop((ListNode **)&g_alloc_list, &header->node);
 
-    munmap(ptr, header->size + sizeof(BigAllocationHeader));
+    munmap((void *)header, header->size + sizeof(BigAllocationHeader));
 }
 
 void *ReallocBig(void *ptr, size_t new_size)
 {
     DebugLog(">> ReallocBig(%p, %lu)\n", ptr, new_size);
 
-    BigAllocationHeader *header = (BigAllocationHeader *)ptr - 1;
+    BigAllocationHeader *header = GetBigAllocPointer(ptr);
 
     size_t total_size = header->size + sizeof(BigAllocationHeader);
     int page_count = total_size / g_mmap_page_size + (total_size % g_mmap_page_size) != 0;
@@ -76,7 +73,7 @@ void CleanupBigAllocations()
 {
     while (g_alloc_list)
     {
-        FreeBig(g_alloc_list + 1);
+        FreeBig(GetBigAllocPointer(g_alloc_list));
     }
 }
 
@@ -118,7 +115,7 @@ void PrintBigAllocationState()
         int page_count = total_size / g_mmap_page_size + (total_size % g_mmap_page_size) != 0;
         printf(
             "Allocation(%p): %lu bytes, using %d pages\n",
-            alloc + 1, alloc->size, page_count
+            GetBigAllocPointer(alloc), alloc->size, page_count
         );
 
         alloc = (BigAllocationHeader *)alloc->node.next;

@@ -154,7 +154,18 @@ typedef struct
 {
     ListNode node;
     size_t size;
+    uint64_t alignment_padding; // Padding for 16-byte alignment of result pointer
 } BigAllocationHeader;
+
+static inline BigAllocationHeader *GetBigAllocHeader(void *ptr)
+{
+    return (BigAllocationHeader *)ptr - 1;
+}
+
+static inline void *GetBigAllocPointer(BigAllocationHeader *alloc)
+{
+    return (void *)(alloc + 1);
+}
 
 bool IsBigAllocation(void *ptr);
 void *AllocBig(size_t size);
