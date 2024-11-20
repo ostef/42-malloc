@@ -15,6 +15,9 @@ void *Allocate(size_t size)
 {
     EnsureInitialized();
 
+    if (size > FT_MALLOC_MAX_SIZE)
+        return NULL;
+
     #ifdef FT_MALLOC_BIG_SIZE_THRESHOLD
     Assert(FT_MALLOC_BIG_SIZE_THRESHOLD > 0 && "Invalid value for FT_MALLOC_BIG_SIZE_THRESHOLD");
     size_t big_size_threshold = (size_t)FT_MALLOC_BIG_SIZE_THRESHOLD;
@@ -42,6 +45,9 @@ void Free(void *ptr)
 void *ResizeAllocation(void *ptr, size_t new_size)
 {
     EnsureInitialized();
+
+    if (new_size > FT_MALLOC_MAX_SIZE)
+        return NULL;
 
     if (IsBigAllocation(ptr))
         return ReallocBig(ptr, new_size);

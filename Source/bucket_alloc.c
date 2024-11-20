@@ -153,6 +153,7 @@ void FreeBucketSlot(AllocationBucket *bucket, void *ptr)
     uint32_t *bookkeeping = GetBucketBookkeepingDataPointer(bucket);
     bool is_already_free = (bookkeeping[slot_index] >> bit_index) & 1;
     Assert(!is_already_free && "Freeing memory that has already been freed or was never allocated");
+
     bookkeeping[slot_index] |= 1 << bit_index;
 }
 
@@ -187,9 +188,9 @@ AllocationBucket *GetAllocationBucketOfPointer(void *ptr)
 
 AllocationBucket *GetAvailableAllocationBucketForSize(size_t size)
 {
-    size = AlignToNextPowerOfTwo(size);
-    if (size < 32)
-        size = 32;
+    size = Align64BitNumberToNextPowerOfTwo(size);
+    if (size < FT_MALLOC_MIN_SIZE)
+        size = FT_MALLOC_MIN_SIZE;
 
     AllocationBucket *bucket = g_bucket_list;
     while (bucket)
@@ -235,9 +236,9 @@ void *ReallocFromBucket(void *ptr, size_t new_size)
     AllocationBucket *bucket = GetAllocationBucketOfPointer(ptr);
     Assert(bucket != NULL);
 
-    new_size = AlignToNextPowerOfTwo(new_size);
-    if (new_size < 32)
-        new_size = 32;
+    new_size = Align64BitNumberToNextPowerOfTwo(new_size);
+    if (new_size < FT_MALLOC_MIN_SIZE)
+        new_size = FT_MALLOC_MIN_SIZE;
 
     if (new_size <= bucket->alloc_size)
         return ptr;
