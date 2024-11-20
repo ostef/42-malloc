@@ -106,10 +106,11 @@ static inline void ListNodePop(ListNode **list_front, ListNode *node)
 
 typedef struct
 {
-    ListNode node;
-    size_t total_page_size;
-    size_t num_alloc;
-    size_t alloc_size;
+    ListNode node; // 16 bytes
+    size_t total_page_size; // 8 bytes
+    size_t num_alloc_capacity; // 8 bytes
+    size_t num_alloc; // 8 bytes
+    size_t alloc_size; // 8 bytes
 } AllocationBucket;
 
 static inline uint32_t *GetBucketBookkeepingDataPointer(AllocationBucket *bucket)
@@ -125,9 +126,11 @@ static inline size_t GetBucketNumBookkeepingSlots(size_t num_alloc_capacity)
     return num_slots;
 }
 
+size_t GetBucketBookkeepingSize(size_t alloc_capacity);
+
 static inline size_t GetRequiredSizeForBucket(size_t alloc_size, unsigned int alloc_capacity)
 {
-    return sizeof(AllocationBucket) + GetBucketNumBookkeepingSlots(alloc_capacity) * sizeof(uint32_t) + alloc_size * alloc_capacity;
+    return sizeof(AllocationBucket) + GetBucketBookkeepingSize(alloc_capacity) + alloc_size * alloc_capacity;
 }
 
 AllocationBucket *CreateAllocationBucket(size_t alloc_size, unsigned int alloc_capacity);
@@ -135,6 +138,15 @@ void FreeAllocationBucket(AllocationBucket *bucket);
 
 size_t GetBucketNumAllocCapacityBeforehand(size_t total_page_size, size_t alloc_size);
 size_t GetBucketNumAllocCapacity(AllocationBucket *bucket);
+
+static inline void *GetBucketAllocationStartPointer(AllocationBucket *bucket)
+{
+    void *ptr = (void *)bucket;
+    ptr += sizeof(AllocationBucket);
+    ptr += GetBucketBookkeepingSize(bucket->num_alloc_capacity);
+
+    return ptr;
+}
 
 void *OccupyFirstFreeBucketSlot(AllocationBucket *bucket);
 void FreeBucketSlot(AllocationBucket *bucket, void *ptr);
@@ -193,21 +205,22 @@ static inline int BitScanForward64(uint64_t value)
     return __builtin_ffsll(value);
 }
 
-static inline void *AlignPointer(void *ptr, unsigned int align)
+static inline uint64_t AlignNumber(uint64_t x, uint64_t align)
 {
-    uint64_t addr = (uint64_t)ptr;
-    if ((addr & align) != 0)
-        addr = (addr + (align - 1)) & ~(align - 1);
-
-    return (void *)addr;
-}
-
-static inline size_t AlignToPageSize(size_t x)
-{
-    if ((x & g_mmap_page_size) != 0)
-        x = (x + (g_mmap_page_size - 1)) & ~(g_mmap_page_size - 1);
+    if ((x % align) != 0)
+        x += align - x % align;
 
     return x;
+}
+
+static inline uint64_t AlignToPageSize(uint64_t x)
+{
+    return AlignNumber(x, g_mmap_page_size);
+}
+
+static inline void *AlignPointer(void *ptr, uint64_t align)
+{
+    return (void *)AlignNumber((uint64_t)ptr, align);
 }
 
 #endif

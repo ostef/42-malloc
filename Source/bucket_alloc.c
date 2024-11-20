@@ -24,15 +24,27 @@ static inline void DebugLogBinaryNumber(uint32_t x)
 #define DebugLogBinaryNumber(x) (void)x
 #endif
 
+size_t GetBucketBookkeepingSize(size_t num_alloc_capacity)
+{
+    size_t num_bytes = num_alloc_capacity / 8 + (num_alloc_capacity % 8 > 0);
+    size_t num_slots = num_bytes / sizeof(uint32_t) + (num_bytes % sizeof(uint32_t) > 0);
+
+    return AlignNumber(num_slots * sizeof(uint32_t), FT_MALLOC_ALIGNMENT);
+}
+
 AllocationBucket *CreateAllocationBucket(size_t alloc_size, unsigned int alloc_capacity)
 {
     // Align page size to system page size
     size_t page_size = GetRequiredSizeForBucket(alloc_size, alloc_capacity);
     page_size = AlignToPageSize(page_size);
+    Assert(page_size % g_mmap_page_size == 0);
 
     // By aligning page size we might grow how much memory the bucket has
     // which means the alloc capacity might've increased, so we recalculate it
-    alloc_capacity = GetBucketNumAllocCapacityBeforehand(page_size, alloc_size);
+    while (sizeof(AllocationBucket) + GetBucketBookkeepingSize(alloc_capacity) + alloc_capacity * alloc_size < page_size)
+    {
+        alloc_capacity += 1;
+    }
 
     void *ptr = mmap(NULL, page_size, PROT_WRITE | PROT_READ, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
     if (!ptr || ptr == MAP_FAILED)
@@ -44,13 +56,14 @@ AllocationBucket *CreateAllocationBucket(size_t alloc_size, unsigned int alloc_c
 
     bucket->alloc_size = alloc_size;
     bucket->total_page_size = page_size;
+    bucket->num_alloc_capacity = alloc_capacity;
 
     uint32_t *bookkeeping = GetBucketBookkeepingDataPointer(bucket);
-    size_t bookkeeping_size = GetBucketNumBookkeepingSlots(GetBucketNumAllocCapacity(bucket)) * sizeof(uint32_t);
+    size_t bookkeeping_size = GetBucketNumBookkeepingSlots(bucket->num_alloc_capacity) * sizeof(uint32_t);
     memset(bookkeeping, 0xffffffff, bookkeeping_size);
 
     DebugLog("Created allocation bucket: alloc_size=%lu, page_size=%lu, num_alloc_capacity=%lu\n",
-        alloc_size, page_size, GetBucketNumAllocCapacity(bucket));
+        alloc_size, page_size, bucket->num_alloc_capacity);
 
     return bucket;
 }
@@ -63,7 +76,7 @@ void FreeAllocationBucket(AllocationBucket *bucket)
     ListNodePop((ListNode **)&g_bucket_list, &bucket->node);
 
     DebugLog("Freed allocation bucket: alloc_size=%lu, page_size=%lu, num_alloc_capacity=%lu\n",
-        bucket->alloc_size, bucket->total_page_size, GetBucketNumAllocCapacity(bucket));
+        bucket->alloc_size, bucket->total_page_size, bucket->num_alloc_capacity);
 
     munmap(bucket, (size_t)bucket->total_page_size);
 }
@@ -82,7 +95,7 @@ size_t GetBucketNumAllocCapacityBeforehand(size_t total_page_size, size_t alloc_
     size_t avail_without_bucket = total_page_size - sizeof(AllocationBucket);
     size_t num_alloc = (size_t)(avail_without_bucket / (alloc_size + 1.0 / sizeof(uint32_t)));
 
-    while (sizeof(AllocationBucket) + GetBucketNumBookkeepingSlots(num_alloc) + num_alloc * alloc_size > total_page_size)
+    while (sizeof(AllocationBucket) + GetBucketBookkeepingSize(num_alloc) + num_alloc * alloc_size > total_page_size)
     {
         num_alloc -= 1;
     }
@@ -98,13 +111,13 @@ size_t GetBucketNumAllocCapacity(AllocationBucket *bucket)
 void *OccupyFirstFreeBucketSlot(AllocationBucket *bucket)
 {
     uint32_t *bookkeeping = GetBucketBookkeepingDataPointer(bucket);
-    size_t num_bookkeeping_slots = GetBucketNumBookkeepingSlots(GetBucketNumAllocCapacity(bucket));
-    void *memory = (void *)(bookkeeping + num_bookkeeping_slots);
+    size_t num_bookkeeping_slots = GetBucketNumBookkeepingSlots(bucket->num_alloc_capacity);
+    void *memory = GetBucketAllocationStartPointer(bucket);
 
     DebugLog("OccupyFirstFreeBucketSlot(num_alloc=%lu, num_alloc_capacity=%lu, num_bookkeeping_slots=%lu)\n",
-        bucket->num_alloc, GetBucketNumAllocCapacity(bucket), num_bookkeeping_slots);
+        bucket->num_alloc, bucket->num_alloc_capacity, num_bookkeeping_slots);
 
-    Assert(bucket->num_alloc < GetBucketNumAllocCapacity(bucket));
+    Assert(bucket->num_alloc < bucket->num_alloc_capacity);
 
     for (size_t i = 0; i < num_bookkeeping_slots; i += 1)
     {
@@ -124,7 +137,7 @@ void *OccupyFirstFreeBucketSlot(AllocationBucket *bucket)
 
             bookkeeping[i] &= ~(1 << bit_index);
 
-            Assert(alloc_index < GetBucketNumAllocCapacity(bucket));
+            Assert(alloc_index < bucket->num_alloc_capacity);
 
             bucket->num_alloc += 1;
 
@@ -139,11 +152,8 @@ void *OccupyFirstFreeBucketSlot(AllocationBucket *bucket)
 
 ssize_t GetPointerBucketAllocIndex(AllocationBucket *bucket, void *ptr)
 {
-    uint32_t *bookkeeping = GetBucketBookkeepingDataPointer(bucket);
-    size_t num_bookkeeping_slots = GetBucketNumBookkeepingSlots(GetBucketNumAllocCapacity(bucket));
-
-    void *memory_start = (void *)(bookkeeping + num_bookkeeping_slots);
-    void *memory_end = (void *)bucket + bucket->total_page_size;
+    void *memory_start = GetBucketAllocationStartPointer(bucket);
+    void *memory_end = memory_start + bucket->alloc_size * bucket->num_alloc_capacity;
 
     if (ptr < memory_start || ptr > memory_end - bucket->alloc_size)
         return -1;
@@ -223,7 +233,7 @@ AllocationBucket *GetAvailableAllocationBucketForSize(size_t size)
     AllocationBucket *bucket = g_bucket_list;
     while (bucket)
     {
-        if (size == bucket->alloc_size && bucket->num_alloc < GetBucketNumAllocCapacity(bucket))
+        if (size == bucket->alloc_size && bucket->num_alloc < bucket->num_alloc_capacity)
             return bucket;
 
         bucket = (AllocationBucket *)bucket->node.next;
@@ -337,7 +347,7 @@ void PrintBucketAllocationState()
     {
         printf(
             "Bucket(%p): alloc_size=%lu, total_page_size=%lu, num_alloc=%lu, num_alloc_capacity=%lu, num_allocated_bytes=%lu\n",
-            bucket, bucket->alloc_size, bucket->total_page_size, bucket->num_alloc, GetBucketNumAllocCapacity(bucket), bucket->num_alloc * bucket->alloc_size
+            bucket, bucket->alloc_size, bucket->total_page_size, bucket->num_alloc, bucket->num_alloc_capacity, bucket->num_alloc * bucket->alloc_size
         );
         bucket = (AllocationBucket *)bucket->node.next;
     }
