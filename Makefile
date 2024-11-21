@@ -10,6 +10,7 @@ OBJ_FILES=$(SRC_FILES:.c=.o)
 CC=gcc
 C_FLAGS=-Wall -Wextra -Werror -ggdb -I. $(addprefix -D,$(DEFINES))
 
+TESTS=main performance general free
 # We cannot enable optimizations for tests because calls to
 # malloc would be stripped away in many circumstances
 TEST_C_FLAGS:=$(C_FLAGS)
@@ -40,4 +41,6 @@ Tests/%: Tests/%.c $(NAME)
 	$(CC) $(TEST_C_FLAGS) $< $(NAME) -o $@.test
 	./$@.test
 
-.PHONY: all clean fclean re
+tests: $(addprefix Tests/,$(TESTS))
+
+.PHONY: all clean fclean re tests
