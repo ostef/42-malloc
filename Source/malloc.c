@@ -40,6 +40,9 @@ void HeapFree(MemoryHeap *heap, void *ptr)
 {
     EnsureInitialized();
 
+    if (!ptr)
+        return;
+
     if (IsBigAllocation(heap, ptr))
         FreeBig(heap, ptr);
     else
@@ -50,9 +53,12 @@ void *HeapResizeAlloc(MemoryHeap *heap, void *ptr, size_t new_size)
 {
     EnsureInitialized();
 
+    if (!ptr)
+        return HeapAlloc(heap, new_size);
+
     if (new_size > FT_MALLOC_MAX_SIZE)
     {
-        Free(ptr);
+        HeapFree(heap, ptr);
         return NULL;
     }
 
