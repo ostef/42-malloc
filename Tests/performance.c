@@ -1,13 +1,4 @@
-#include "../malloc.h"
-
-#include <stdlib.h>
-#include <stdint.h>
-#include <stdbool.h>
-#include <stdio.h>
-#include <errno.h>
-#include <string.h>
-#include <time.h>
-#include <unistd.h>
+#include "common.h"
 
 void Test(
     int alloc_size,
