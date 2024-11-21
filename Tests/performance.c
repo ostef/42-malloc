@@ -66,6 +66,9 @@ int main()
     Test(100000, 10, malloc, free, realloc);
     Test(100000, 10, Alloc, Free, ResizeAlloc);
 
+    Test(10000000, 10, malloc, free, realloc);
+    Test(10000000, 10, Alloc, Free, ResizeAlloc);
+
     printf("\n");
     // PrintAllocationState();
     DestroyGlobalHeap();
