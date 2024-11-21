@@ -22,7 +22,8 @@ void *AllocBig(MemoryHeap *heap, size_t size)
 {
     DebugLog(">> AllocBig(%ld)\n", size);
 
-    void *ptr = mmap(NULL, size + sizeof(BigAllocationHeader), PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    size_t page_size = AlignToPageSize(size + sizeof(BigAllocationHeader));
+    void *ptr = mmap(NULL, page_size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
 
     BigAllocationHeader *header = (BigAllocationHeader *)ptr;
     *header = (BigAllocationHeader){};
@@ -30,7 +31,14 @@ void *AllocBig(MemoryHeap *heap, size_t size)
 
     ListNodePushFront((ListNode **)&heap->big_allocation_list, &header->node);
 
-    return GetBigAllocPointer(header);
+    ptr = GetBigAllocPointer(header);
+
+#ifdef FT_MALLOC_POISON_MEMORY
+    memset(ptr, FT_MALLOC_MEMORY_PATTERN_ALLOCATED_UNTOUCHED, size);
+    memset(ptr + size, FT_MALLOC_MEMORY_PATTERN_NEVER_ALLOCATED, page_size - size - sizeof(BigAllocationHeader));
+#endif
+
+    return ptr;
 }
 
 void FreeBig(MemoryHeap *heap, void *ptr)
@@ -60,6 +68,11 @@ void *ReallocBig(MemoryHeap *heap, void *ptr, size_t new_size)
     // just change the recorded size and don't move the memory
     if (new_page_count <= page_count)
     {
+#ifdef FT_MALLOC_POISON_MEMORY
+        if (header->size > new_size)
+            memset(ptr + new_size, FT_MALLOC_MEMORY_PATTERN_FREED, header->size - new_size);
+#endif
+
         header->size = new_size;
         return ptr;
     }

@@ -55,10 +55,19 @@ AllocationBucket *CreateAllocationBucket(MemoryHeap *heap, size_t alloc_size, un
     bucket->alloc_size = alloc_size;
     bucket->total_page_size = page_size;
     bucket->num_alloc_capacity = alloc_capacity;
+    Assert(
+        GetBucketAllocationStartPointer(bucket) + bucket->alloc_size * bucket->num_alloc_capacity
+        <= (void *)bucket + page_size
+    );
 
     uint32_t *bookkeeping = GetBucketBookkeepingDataPointer(bucket);
-    size_t bookkeeping_size = GetBucketNumBookkeepingSlots(bucket->num_alloc_capacity) * sizeof(uint32_t);
-    memset(bookkeeping, 0xffffffff, bookkeeping_size);
+    size_t bookkeeping_size = GetBucketBookkeepingSize(bucket->num_alloc_capacity);
+    memset(bookkeeping, 0xff, bookkeeping_size);
+
+#ifdef FT_MALLOC_POISON_MEMORY
+    void *memory_start = GetBucketAllocationStartPointer(bucket);
+    memset(memory_start, FT_MALLOC_MEMORY_PATTERN_NEVER_ALLOCATED, bucket->alloc_size * bucket->num_alloc_capacity);
+#endif
 
     DebugLog("Created allocation bucket: alloc_size=%lu, page_size=%lu, num_alloc_capacity=%lu\n",
         alloc_size, page_size, bucket->num_alloc_capacity);
@@ -252,6 +261,10 @@ void *AllocFromBucket(MemoryHeap *heap, size_t size)
 
     void *ptr = OccupyFirstFreeBucketSlot(bucket);
 
+#ifdef FT_MALLOC_POISON_MEMORY
+    memset(ptr, FT_MALLOC_MEMORY_PATTERN_ALLOCATED_UNTOUCHED, bucket->alloc_size);
+#endif
+
     return ptr;
 }
 
@@ -282,6 +295,10 @@ void FreeFromBucket(MemoryHeap *heap, void *ptr)
     Assert(!already_freed && "Free: Double free");
 
     FreeBucketSlot(bucket, ptr);
+
+#ifdef FT_MALLOC_POISON_MEMORY
+    memset(ptr, FT_MALLOC_MEMORY_PATTERN_FREED, bucket->alloc_size);
+#endif
 }
 
 void *ReallocFromBucket(MemoryHeap *heap, void *ptr, size_t new_size)
@@ -296,11 +313,18 @@ void *ReallocFromBucket(MemoryHeap *heap, void *ptr, size_t new_size)
         new_size = FT_MALLOC_MIN_SIZE;
 
     if (new_size <= bucket->alloc_size)
+    {
+#ifdef FT_MALLOC_POISON_MEMORY
+        memset(ptr + new_size, FT_MALLOC_MEMORY_PATTERN_FREED, bucket->alloc_size - new_size);
+#endif
+
         return ptr;
+    }
 
     void *new_ptr = HeapAlloc(heap, new_size);
     size_t bytes_to_copy = bucket->alloc_size > new_size ? new_size : bucket->alloc_size;
     memcpy(new_ptr, ptr, bytes_to_copy);
+
     FreeBucketSlot(bucket, ptr);
 
     return new_ptr;

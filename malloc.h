@@ -11,6 +11,11 @@
 // This is not a concrete limit, just an ideal virtual limit
 #define FT_MALLOC_MAX_SIZE 0x7ffffffffffffff0
 
+// #define FT_MALLOC_POISON_MEMORY
+#define FT_MALLOC_MEMORY_PATTERN_NEVER_ALLOCATED 0xfe
+#define FT_MALLOC_MEMORY_PATTERN_ALLOCATED_UNTOUCHED 0xce
+#define FT_MALLOC_MEMORY_PATTERN_FREED 0xcd
+
 // If the allocation size goes beyong this many pages, we'll stop using buckets
 // and store allocations directly in a linked list
 #ifndef FT_MALLOC_BIG_SIZE_PAGE_THRESHOLD
