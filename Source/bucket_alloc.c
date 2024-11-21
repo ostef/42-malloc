@@ -39,7 +39,7 @@ AllocationBucket *CreateAllocationBucket(MemoryHeap *heap, size_t alloc_size, un
 
     // By aligning page size we might grow how much memory the bucket has
     // which means the alloc capacity might've increased, so we recalculate it
-    while (sizeof(AllocationBucket) + GetBucketBookkeepingSize(alloc_capacity) + alloc_capacity * alloc_size < page_size)
+    while (sizeof(AllocationBucket) + GetBucketBookkeepingSize(alloc_capacity + 1) + (alloc_capacity + 1) * alloc_size < page_size)
     {
         alloc_capacity += 1;
     }
