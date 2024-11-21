@@ -45,6 +45,14 @@ bool Test(
 
     printf("\n");
 
+    free_func(NULL);
+    ptr1 = realloc_func(ptr1, sizeof(int) * N * 2);
+    int *ptr3 = (int *)realloc_func(NULL, sizeof(int) * N);
+
+    free_func(ptr1);
+    free_func(ptr3);
+    free_func(ptr2);
+
     return true;
 }
 
