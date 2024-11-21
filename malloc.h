@@ -111,7 +111,7 @@ AllocationStats GetAllocationStats();
 void PrintHeapAllocationState(MemoryHeap *heap);
 void PrintAllocationState();
 
-// The subject requires a show_alloc_mem function
+// The subject requires a show_alloc_mem function that prints all allocations in ascending address order
 void show_alloc_mem();
 
 #ifdef FT_MALLOC_OVERRIDE_LIBC_MALLOC
