@@ -18,13 +18,11 @@ void *Allocate(size_t size)
     if (size > FT_MALLOC_MAX_SIZE)
         return NULL;
 
-    #ifdef FT_MALLOC_BIG_SIZE_THRESHOLD
-    Assert(FT_MALLOC_BIG_SIZE_THRESHOLD > 0 && "Invalid value for FT_MALLOC_BIG_SIZE_THRESHOLD");
+#ifdef FT_MALLOC_BIG_SIZE_THRESHOLD
     size_t big_size_threshold = (size_t)FT_MALLOC_BIG_SIZE_THRESHOLD;
-    #else
-    Assert(FT_MALLOC_BIG_SIZE_PAGE_THRESHOLD > 0 && "Invalid value for FT_MALLOC_BIG_SIZE_PAGE_THRESHOLD");
+#else
     size_t big_size_threshold = g_mmap_page_size * FT_MALLOC_BIG_SIZE_PAGE_THRESHOLD;
-    #endif
+#endif
 
     void *result = NULL;
     if (size >= big_size_threshold)
@@ -52,7 +50,10 @@ void *ResizeAllocation(void *ptr, size_t new_size)
     EnsureInitialized();
 
     if (new_size > FT_MALLOC_MAX_SIZE)
+    {
+        Free(ptr);
         return NULL;
+    }
 
     if (IsBigAllocation(ptr))
         return ReallocBig(ptr, new_size);

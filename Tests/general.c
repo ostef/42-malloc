@@ -8,6 +8,7 @@
 #include <string.h>
 #include <time.h>
 #include <unistd.h>
+#include <assert.h>
 
 float ElapsedTimeMS(struct timespec start, struct timespec end)
 {
@@ -23,7 +24,7 @@ size_t GetRandomAllocSize()
     };
     static const int Num_Sizes = sizeof(Sizes) / sizeof(*Sizes);
 
-    unsigned int index = rand();
+    unsigned int index = (unsigned int)rand();
     index = index % Num_Sizes;
 
     return Sizes[index];
@@ -57,19 +58,40 @@ void Test(
     for (int i = 0; i < N; i += 1)
     {
         size_t size = GetRandomAllocSize();
-        DebugLog("Allocating %lu bytes\n", size);
-        void *ptr = alloc_func(size);
-        if (!ptr)
+        int ptr_index = -1;
+        void *ptr = NULL;
+        if (num_allocated_pointers > 0 && (unsigned int)rand() / (float)RAND_MAX < 0.2)
         {
-            printf("%s: Could not allocate %lu bytes (%s)\n", name, size, strerror(errno));
-            exit(1);
+            ptr_index = (unsigned int)rand() % num_allocated_pointers;
+
+            DebugLog("Resizing allocation %d(%p): %lu bytes\n", ptr_index, allocated_pointers[ptr_index], size);
+
+            ptr = realloc_func(allocated_pointers[ptr_index], size);
+            if (!ptr)
+            {
+                printf("%s: Could not resize allocation %d(%p) to %lu bytes (%s)\n", name, ptr_index, allocated_pointers[ptr_index], size, strerror(errno));
+                exit(1);
+            }
+
+            allocated_pointers[ptr_index] = ptr;
+            DebugLog("Result resize ptr: %p\n", ptr);
         }
-        DebugLog("Result ptr: %p\n", ptr);
+        else
+        {
+            DebugLog("Allocating %lu bytes\n", size);
+            ptr = alloc_func(size);
+            if (!ptr)
+            {
+                printf("%s: Could not allocate %lu bytes (%s)\n", name, size, strerror(errno));
+                exit(1);
+            }
+            DebugLog("Result ptr: %p\n", ptr);
+        }
 
         if ((num_allocated_pointers > 0 && (unsigned int)rand() / (float)RAND_MAX < 0.2)
             || num_allocated_pointers == 10000)
         {
-            unsigned int num_to_free = ((unsigned int)rand() % (num_allocated_pointers - 1)) + 1;
+            unsigned int num_to_free = (unsigned int)rand() % num_allocated_pointers + 1;
             for (unsigned int i = 0; i < num_to_free && num_allocated_pointers > 0; i += 1)
             {
                 int index = (unsigned int)rand() % num_allocated_pointers;
@@ -81,8 +103,11 @@ void Test(
             }
         }
 
-        allocated_pointers[num_allocated_pointers] = ptr;
-        num_allocated_pointers += 1;
+        if (ptr_index < 0)
+        {
+            allocated_pointers[num_allocated_pointers] = ptr;
+            num_allocated_pointers += 1;
+        }
     }
 
     for (int i = 0; i < num_allocated_pointers; i += 1)
@@ -102,7 +127,14 @@ int main()
 {
     printf("Page size: %ld\n", sysconf(_SC_PAGESIZE));
 
+    // struct timespec time;
+    // clock_gettime(CLOCK_MONOTONIC, &time);
+    // srand(time.tv_sec * 1000000000 + time.tv_nsec);
+
+    srand(0x12345);
     Test(10000, malloc, free, realloc);
+
+    srand(0x12345);
     Test(10000, Allocate, Free, ResizeAllocation);
 
     AllocationStats stats = GetAllocationStats();

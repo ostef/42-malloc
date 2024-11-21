@@ -4,12 +4,26 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <string.h>
-#include <assert.h>
+#include <assert.h> // For static_assert
 
 #include <sys/mman.h>
 #include <unistd.h>
 
 #include "malloc.h"
+
+static_assert(sizeof(size_t) == 8, "Expected size_t to be 64 bits");
+
+#ifdef FT_MALLOC_BIG_SIZE_THRESHOLD
+static_assert(FT_MALLOC_BIG_SIZE_THRESHOLD > 0, "Invalid value for FT_MALLOC_BIG_SIZE_THRESHOLD");
+#endif
+
+#ifdef FT_MALLOC_BIG_SIZE_PAGE_THRESHOLD
+static_assert(FT_MALLOC_BIG_SIZE_PAGE_THRESHOLD > 0, "Invalid value for FT_MALLOC_BIG_SIZE_PAGE_THRESHOLD");
+#endif
+
+#ifdef FT_MALLOC_MIN_ALLOC_CAPACITY
+static_assert(FT_MALLOC_MIN_ALLOC_CAPACITY > 0, "Invalid value for FT_MALLOC_MIN_ALLOC_CAPACITY");
+#endif
 
 #define Stringify(x) Stringify2(x)
 #define Stringify2(x) #x
@@ -37,42 +51,60 @@ typedef struct ListNode
     struct ListNode *next;
 } ListNode;
 
-static inline void ListNodeInsertAfter(ListNode *node, ListNode *after)
+static inline void VerifyList(ListNode *list)
 {
-    Assert(node->prev == NULL);
-    Assert(node->next == NULL);
-
-    ListNode *next = after->next;
-    if (next)
+    while (list)
     {
-        next->prev = node;
-        node->next = next;
-    }
+        if (list->prev)
+            Assert(list->prev->next == list);
+        if (list->next)
+            Assert(list->next->prev == list);
 
-    node->prev = after;
-    after->next = node;
+        list = list->next;
+    }
 }
 
-static inline void ListNodeInsertBefore(ListNode *node, ListNode *before)
-{
-    Assert(node->prev == NULL);
-    Assert(node->next == NULL);
+// static inline void ListNodeInsertAfter(ListNode *node, ListNode *after)
+// {
+//     Assert(node->prev == NULL);
+//     Assert(node->next == NULL);
 
-    ListNode *prev = before->prev;
-    if (prev)
-    {
-        prev->next = node;
-        node->prev = prev;
-    }
+//     ListNode *next = after->next;
+//     if (next)
+//     {
+//         next->prev = node;
+//         node->next = next;
+//     }
 
-    node->next = before;
-    before->prev = node;
-}
+//     node->prev = after;
+//     after->next = node;
+// }
+
+// static inline void ListNodeInsertBefore(ListNode *node, ListNode *before)
+// {
+//     Assert(node->prev == NULL);
+//     Assert(node->next == NULL);
+
+//     ListNode *prev = before->prev;
+//     if (prev)
+//     {
+//         prev->next = node;
+//         node->prev = prev;
+//     }
+
+//     node->next = before;
+//     before->prev = node;
+// }
 
 static inline void ListNodePushFront(ListNode **list_front, ListNode *node)
 {
     Assert(node->prev == NULL);
     Assert(node->next == NULL);
+
+#ifdef VERIFY_LIST
+    if (*list_front)
+        VerifyList(*list_front);
+#endif
 
     if (*list_front)
     {
@@ -81,12 +113,27 @@ static inline void ListNodePushFront(ListNode **list_front, ListNode *node)
     }
 
     *list_front = node;
+
+#ifdef VERIFY_LIST
+    Assert(*list_front != NULL);
+    VerifyList(*list_front);
+#endif
 }
 
 static inline void ListNodePop(ListNode **list_front, ListNode *node)
 {
+    if (node->prev)
+        Assert(node->prev->next == node);
+    if (node->next)
+        Assert(node->next->prev == node);
+
     ListNode *prev = node->prev;
     ListNode *next = node->next;
+
+#ifdef VERIFY_LIST
+    Assert(*list_front != NULL);
+    VerifyList(*list_front);
+#endif
 
     if (prev)
         prev->next = next;
@@ -102,6 +149,11 @@ static inline void ListNodePop(ListNode **list_front, ListNode *node)
 
     node->prev = NULL;
     node->next = NULL;
+
+#ifdef VERIFY_LIST
+    if (*list_front)
+        VerifyList(*list_front);
+#endif
 }
 
 typedef struct
@@ -164,8 +216,8 @@ void PrintBucketAllocationState();
 
 typedef struct
 {
-    ListNode node;
-    size_t size;
+    ListNode node; // 16 bytes
+    size_t size; // 8 bytes
     uint64_t alignment_padding; // Padding for 16-byte alignment of result pointer
 } BigAllocationHeader;
 

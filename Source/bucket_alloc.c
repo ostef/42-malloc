@@ -37,7 +37,7 @@ AllocationBucket *CreateAllocationBucket(size_t alloc_size, unsigned int alloc_c
     // Align page size to system page size
     size_t page_size = GetRequiredSizeForBucket(alloc_size, alloc_capacity);
     page_size = AlignToPageSize(page_size);
-    Assert(page_size % g_mmap_page_size == 0);
+    Assert((page_size % g_mmap_page_size) == 0);
 
     // By aligning page size we might grow how much memory the bucket has
     // which means the alloc capacity might've increased, so we recalculate it
@@ -300,8 +300,9 @@ void *ReallocFromBucket(void *ptr, size_t new_size)
     if (new_size <= bucket->alloc_size)
         return ptr;
 
-    void *new_ptr = AllocFromBucket(new_size);
-    memcpy(new_ptr, ptr, bucket->alloc_size);
+    void *new_ptr = Allocate(new_size);
+    size_t bytes_to_copy = bucket->alloc_size > new_size ? new_size : bucket->alloc_size;
+    memcpy(new_ptr, ptr, bytes_to_copy);
     FreeBucketSlot(bucket, ptr);
 
     return new_ptr;
