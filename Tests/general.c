@@ -135,7 +135,7 @@ int main()
     Test(10000, malloc, free, realloc);
 
     srand(0x12345);
-    Test(10000, Allocate, Free, ResizeAllocation);
+    Test(10000, Alloc, Free, ResizeAlloc);
 
     AllocationStats stats = GetAllocationStats();
     if (stats.num_allocations > 0 || stats.num_allocated_bytes > 0)
@@ -144,5 +144,5 @@ int main()
         exit(1);
     }
 
-    CleanupAllocations();
+    DestroyGlobalHeap();
 }

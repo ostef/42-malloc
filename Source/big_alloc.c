@@ -4,11 +4,9 @@
 
 // Big allocations are directly made using mmap, and recorded as a linked list
 
-static BigAllocationHeader *g_alloc_list;
-
-bool IsBigAllocation(void *ptr)
+bool IsBigAllocation(MemoryHeap *heap, void *ptr)
 {
-    BigAllocationHeader *alloc = g_alloc_list;
+    BigAllocationHeader *alloc = heap->big_allocation_list;
     while (alloc)
     {
         if (ptr == GetBigAllocPointer(alloc))
@@ -20,7 +18,7 @@ bool IsBigAllocation(void *ptr)
     return false;
 }
 
-void *AllocBig(size_t size)
+void *AllocBig(MemoryHeap *heap, size_t size)
 {
     DebugLog(">> AllocBig(%ld)\n", size);
 
@@ -30,23 +28,23 @@ void *AllocBig(size_t size)
     *header = (BigAllocationHeader){};
     header->size = size;
 
-    ListNodePushFront((ListNode **)&g_alloc_list, &header->node);
+    ListNodePushFront((ListNode **)&heap->big_allocation_list, &header->node);
 
     return GetBigAllocPointer(header);
 }
 
-void FreeBig(void *ptr)
+void FreeBig(MemoryHeap *heap, void *ptr)
 {
     DebugLog(">> FreeBig(%p)\n", ptr);
 
     BigAllocationHeader *header = GetBigAllocHeader(ptr);
 
-    ListNodePop((ListNode **)&g_alloc_list, &header->node);
+    ListNodePop((ListNode **)&heap->big_allocation_list, &header->node);
 
     munmap((void *)header, header->size + sizeof(BigAllocationHeader));
 }
 
-void *ReallocBig(void *ptr, size_t new_size)
+void *ReallocBig(MemoryHeap *heap, void *ptr, size_t new_size)
 {
     DebugLog(">> ReallocBig(%p, %lu)\n", ptr, new_size);
 
@@ -66,28 +64,28 @@ void *ReallocBig(void *ptr, size_t new_size)
         return ptr;
     }
 
-    void *new_ptr = Allocate(new_size);
+    void *new_ptr = HeapAlloc(heap, new_size);
     size_t bytes_to_copy = header->size > new_size ? new_size : header->size;
     memcpy(new_ptr, ptr, bytes_to_copy);
-    FreeBig(ptr);
+    FreeBig(heap, ptr);
 
     return new_ptr;
 }
 
-void CleanupBigAllocations()
+void CleanupBigAllocations(MemoryHeap *heap)
 {
-    while (g_alloc_list)
+    while (heap->big_allocation_list)
     {
-        FreeBig(GetBigAllocPointer(g_alloc_list));
+        FreeBig(heap, GetBigAllocPointer(heap->big_allocation_list));
     }
 }
 
-BigAllocationStats GetBigAllocationStats()
+BigAllocationStats GetBigAllocationStats(MemoryHeap *heap)
 {
     EnsureInitialized();
 
     BigAllocationStats stats = {};
-    BigAllocationHeader *alloc = g_alloc_list;
+    BigAllocationHeader *alloc = heap->big_allocation_list;
     while (alloc)
     {
         stats.num_allocations += 1;
@@ -98,13 +96,13 @@ BigAllocationStats GetBigAllocationStats()
     return stats;
 }
 
-void PrintBigAllocationState()
+void PrintBigAllocationState(MemoryHeap *heap)
 {
     EnsureInitialized();
 
     int total_num_allocations = 0;
     size_t total_num_allocated_bytes = 0;
-    BigAllocationHeader *alloc = g_alloc_list;
+    BigAllocationHeader *alloc = heap->big_allocation_list;
     while (alloc)
     {
         total_num_allocations += 1;
@@ -113,11 +111,11 @@ void PrintBigAllocationState()
     }
 
     printf("Total number of allocations: %d, %lu bytes\n", total_num_allocations, total_num_allocated_bytes);
-    alloc = g_alloc_list;
+    alloc = heap->big_allocation_list;
     while (alloc)
     {
         size_t total_size = alloc->size + sizeof(BigAllocationHeader);
-        int page_count = total_size / g_mmap_page_size + (total_size % g_mmap_page_size) != 0;
+        int page_count = total_size / g_mmap_page_size + ((total_size % g_mmap_page_size) != 0);
         printf(
             "Allocation(%p): %lu bytes, using %d pages\n",
             GetBigAllocPointer(alloc), alloc->size, page_count

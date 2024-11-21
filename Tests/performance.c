@@ -49,24 +49,24 @@ int main()
     printf("Page size: %ld\n", sysconf(_SC_PAGESIZE));
 
     Test(10, 10000, malloc, free, realloc);
-    Test(10, 10000, Allocate, Free, ResizeAllocation);
+    Test(10, 10000, Alloc, Free, ResizeAlloc);
 
     Test(100, 10000, malloc, free, realloc);
-    Test(100, 10000, Allocate, Free, ResizeAllocation);
+    Test(100, 10000, Alloc, Free, ResizeAlloc);
 
     Test(500, 10000, malloc, free, realloc);
-    Test(500, 10000, Allocate, Free, ResizeAllocation);
+    Test(500, 10000, Alloc, Free, ResizeAlloc);
 
     Test(1000, 10000, malloc, free, realloc);
-    Test(1000, 10000, Allocate, Free, ResizeAllocation);
+    Test(1000, 10000, Alloc, Free, ResizeAlloc);
 
     Test(10000, 10000, malloc, free, realloc);
-    Test(10000, 10000, Allocate, Free, ResizeAllocation);
+    Test(10000, 10000, Alloc, Free, ResizeAlloc);
 
     Test(100000, 10, malloc, free, realloc);
-    Test(100000, 10, Allocate, Free, ResizeAllocation);
+    Test(100000, 10, Alloc, Free, ResizeAlloc);
 
     printf("\n");
     // PrintAllocationState();
-    CleanupAllocations();
+    DestroyGlobalHeap();
 }

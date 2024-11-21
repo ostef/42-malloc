@@ -11,20 +11,6 @@
 
 #include "malloc.h"
 
-static_assert(sizeof(size_t) == 8, "Expected size_t to be 64 bits");
-
-#ifdef FT_MALLOC_BIG_SIZE_THRESHOLD
-static_assert(FT_MALLOC_BIG_SIZE_THRESHOLD > 0, "Invalid value for FT_MALLOC_BIG_SIZE_THRESHOLD");
-#endif
-
-#ifdef FT_MALLOC_BIG_SIZE_PAGE_THRESHOLD
-static_assert(FT_MALLOC_BIG_SIZE_PAGE_THRESHOLD > 0, "Invalid value for FT_MALLOC_BIG_SIZE_PAGE_THRESHOLD");
-#endif
-
-#ifdef FT_MALLOC_MIN_ALLOC_CAPACITY
-static_assert(FT_MALLOC_MIN_ALLOC_CAPACITY > 0, "Invalid value for FT_MALLOC_MIN_ALLOC_CAPACITY");
-#endif
-
 #define Stringify(x) Stringify2(x)
 #define Stringify2(x) #x
 
@@ -45,12 +31,6 @@ extern size_t g_mmap_page_size;
 
 void EnsureInitialized();
 
-typedef struct ListNode
-{
-    struct ListNode *prev;
-    struct ListNode *next;
-} ListNode;
-
 static inline void VerifyList(ListNode *list)
 {
     while (list)
@@ -63,38 +43,6 @@ static inline void VerifyList(ListNode *list)
         list = list->next;
     }
 }
-
-// static inline void ListNodeInsertAfter(ListNode *node, ListNode *after)
-// {
-//     Assert(node->prev == NULL);
-//     Assert(node->next == NULL);
-
-//     ListNode *next = after->next;
-//     if (next)
-//     {
-//         next->prev = node;
-//         node->next = next;
-//     }
-
-//     node->prev = after;
-//     after->next = node;
-// }
-
-// static inline void ListNodeInsertBefore(ListNode *node, ListNode *before)
-// {
-//     Assert(node->prev == NULL);
-//     Assert(node->next == NULL);
-
-//     ListNode *prev = before->prev;
-//     if (prev)
-//     {
-//         prev->next = node;
-//         node->prev = prev;
-//     }
-
-//     node->next = before;
-//     before->prev = node;
-// }
 
 static inline void ListNodePushFront(ListNode **list_front, ListNode *node)
 {
@@ -156,15 +104,6 @@ static inline void ListNodePop(ListNode **list_front, ListNode *node)
 #endif
 }
 
-typedef struct
-{
-    ListNode node; // 16 bytes
-    size_t total_page_size; // 8 bytes
-    size_t num_alloc_capacity; // 8 bytes
-    size_t num_alloc; // 8 bytes
-    size_t alloc_size; // 8 bytes
-} AllocationBucket;
-
 static inline uint32_t *GetBucketBookkeepingDataPointer(AllocationBucket *bucket)
 {
     return (uint32_t *)(bucket + 1);
@@ -185,8 +124,8 @@ static inline size_t GetRequiredSizeForBucket(size_t alloc_size, unsigned int al
     return sizeof(AllocationBucket) + GetBucketBookkeepingSize(alloc_capacity) + alloc_size * alloc_capacity;
 }
 
-AllocationBucket *CreateAllocationBucket(size_t alloc_size, unsigned int alloc_capacity);
-void FreeAllocationBucket(AllocationBucket *bucket);
+AllocationBucket *CreateAllocationBucket(MemoryHeap *heap, size_t alloc_size, unsigned int alloc_capacity);
+void FreeAllocationBucket(MemoryHeap *heap, AllocationBucket *bucket);
 
 size_t GetBucketNumAllocCapacityBeforehand(size_t total_page_size, size_t alloc_size);
 size_t GetBucketNumAllocCapacity(AllocationBucket *bucket);
@@ -204,22 +143,17 @@ void *OccupyFirstFreeBucketSlot(AllocationBucket *bucket);
 void FreeBucketSlot(AllocationBucket *bucket, void *ptr);
 
 bool PointerBelongsToBucket(void *ptr, AllocationBucket *bucket, bool *already_freed);
-AllocationBucket *GetAllocationBucketOfPointer(void *ptr, bool *already_freed);
-AllocationBucket *GetAvailableAllocationBucketForSize(size_t size);
+AllocationBucket *GetAllocationBucketOfPointer(MemoryHeap *heap, void *ptr, bool *already_freed);
+AllocationBucket *GetAvailableAllocationBucketForSize(MemoryHeap *heap, size_t size);
 
-void *AllocFromBucket(size_t size);
-void FreeFromBucket(void *ptr);
-void *ReallocFromBucket(void *ptr, size_t new_size);
-void CleanupBucketAllocations();
+void *AllocFromBucket(MemoryHeap *heap, size_t size);
+void FreeFromBucket(MemoryHeap *heap, void *ptr);
+void *ReallocFromBucket(MemoryHeap *heap, void *ptr, size_t new_size);
+void CleanupBucketAllocations(MemoryHeap *heap);
 
-void PrintBucketAllocationState();
+AllocationBucketStats GetBucketAllocationStats(MemoryHeap *heap);
 
-typedef struct
-{
-    ListNode node; // 16 bytes
-    size_t size; // 8 bytes
-    uint64_t alignment_padding; // Padding for 16-byte alignment of result pointer
-} BigAllocationHeader;
+void PrintBucketAllocationState(MemoryHeap *heap);
 
 static inline BigAllocationHeader *GetBigAllocHeader(void *ptr)
 {
@@ -231,13 +165,13 @@ static inline void *GetBigAllocPointer(BigAllocationHeader *alloc)
     return (void *)(alloc + 1);
 }
 
-bool IsBigAllocation(void *ptr);
-void *AllocBig(size_t size);
-void FreeBig(void *ptr);
-void *ReallocBig(void *ptr, size_t new_size);
-void CleanupBigAllocations();
-
-void PrintBigAllocationState();
+bool IsBigAllocation(MemoryHeap *heap, void *ptr);
+void *AllocBig(MemoryHeap *heap, size_t size);
+void FreeBig(MemoryHeap *heap, void *ptr);
+void *ReallocBig(MemoryHeap *heap, void *ptr, size_t new_size);
+void CleanupBigAllocations(MemoryHeap *heap);
+BigAllocationStats GetBigAllocationStats(MemoryHeap *heap);
+void PrintBigAllocationState(MemoryHeap *heap);
 
 static inline uint64_t Align64BitNumberToNextPowerOfTwo(uint64_t x)
 {

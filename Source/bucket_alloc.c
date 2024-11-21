@@ -7,8 +7,6 @@
 
 #include "malloc_internal.h"
 
-static AllocationBucket *g_bucket_list;
-
 #ifdef FT_MALLOC_DEBUG_LOG
 static inline void DebugLogBinaryNumber(uint32_t x)
 {
@@ -32,7 +30,7 @@ size_t GetBucketBookkeepingSize(size_t num_alloc_capacity)
     return AlignNumber(num_slots * sizeof(uint32_t), FT_MALLOC_ALIGNMENT);
 }
 
-AllocationBucket *CreateAllocationBucket(size_t alloc_size, unsigned int alloc_capacity)
+AllocationBucket *CreateAllocationBucket(MemoryHeap *heap, size_t alloc_size, unsigned int alloc_capacity)
 {
     // Align page size to system page size
     size_t page_size = GetRequiredSizeForBucket(alloc_size, alloc_capacity);
@@ -52,7 +50,7 @@ AllocationBucket *CreateAllocationBucket(size_t alloc_size, unsigned int alloc_c
 
     AllocationBucket *bucket = (AllocationBucket *)ptr;
     *bucket = (AllocationBucket){};
-    ListNodePushFront((ListNode **)&g_bucket_list, &bucket->node);
+    ListNodePushFront((ListNode **)&heap->allocation_bucket_list, &bucket->node);
 
     bucket->alloc_size = alloc_size;
     bucket->total_page_size = page_size;
@@ -68,12 +66,12 @@ AllocationBucket *CreateAllocationBucket(size_t alloc_size, unsigned int alloc_c
     return bucket;
 }
 
-void FreeAllocationBucket(AllocationBucket *bucket)
+void FreeAllocationBucket(MemoryHeap *heap, AllocationBucket *bucket)
 {
     Assert(bucket != NULL);
     Assert(bucket->num_alloc == 0 && "Freeing non empty allocation bucket");
 
-    ListNodePop((ListNode **)&g_bucket_list, &bucket->node);
+    ListNodePop((ListNode **)&heap->allocation_bucket_list, &bucket->node);
 
     DebugLog("Freed allocation bucket: alloc_size=%lu, page_size=%lu, num_alloc_capacity=%lu\n",
         bucket->alloc_size, bucket->total_page_size, bucket->num_alloc_capacity);
@@ -81,12 +79,12 @@ void FreeAllocationBucket(AllocationBucket *bucket)
     munmap(bucket, (size_t)bucket->total_page_size);
 }
 
-void CleanupBucketAllocations()
+void CleanupBucketAllocations(MemoryHeap *heap)
 {
-    while (g_bucket_list)
+    while (heap->allocation_bucket_list)
     {
-        g_bucket_list->num_alloc = 0;
-        FreeAllocationBucket(g_bucket_list);
+        heap->allocation_bucket_list->num_alloc = 0;
+        FreeAllocationBucket(heap, heap->allocation_bucket_list);
     }
 }
 
@@ -207,9 +205,9 @@ bool PointerWasAllocatedFromBucket(void *ptr, AllocationBucket *bucket, bool *al
     return !is_free;
 }
 
-AllocationBucket *GetAllocationBucketOfPointer(void *ptr, bool *already_freed)
+AllocationBucket *GetAllocationBucketOfPointer(MemoryHeap *heap, void *ptr, bool *already_freed)
 {
-    AllocationBucket *bucket = g_bucket_list;
+    AllocationBucket *bucket = heap->allocation_bucket_list;
     while (bucket)
     {
         if (PointerWasAllocatedFromBucket(ptr, bucket, already_freed))
@@ -224,13 +222,13 @@ AllocationBucket *GetAllocationBucketOfPointer(void *ptr, bool *already_freed)
     return NULL;
 }
 
-AllocationBucket *GetAvailableAllocationBucketForSize(size_t size)
+AllocationBucket *GetAvailableAllocationBucketForSize(MemoryHeap *heap, size_t size)
 {
     size = Align64BitNumberToNextPowerOfTwo(size);
     if (size < FT_MALLOC_MIN_SIZE)
         size = FT_MALLOC_MIN_SIZE;
 
-    AllocationBucket *bucket = g_bucket_list;
+    AllocationBucket *bucket = heap->allocation_bucket_list;
     while (bucket)
     {
         if (size == bucket->alloc_size && bucket->num_alloc < bucket->num_alloc_capacity)
@@ -241,14 +239,14 @@ AllocationBucket *GetAvailableAllocationBucketForSize(size_t size)
 
     unsigned int alloc_capacity = FT_MALLOC_MIN_ALLOC_CAPACITY;
 
-    return CreateAllocationBucket(size, alloc_capacity);
+    return CreateAllocationBucket(heap, size, alloc_capacity);
 }
 
-void *AllocFromBucket(size_t size)
+void *AllocFromBucket(MemoryHeap *heap, size_t size)
 {
     DebugLog(">> AllocFromBucket(%lu)\n", size);
 
-    AllocationBucket *bucket = GetAvailableAllocationBucketForSize(size);
+    AllocationBucket *bucket = GetAvailableAllocationBucketForSize(heap, size);
     if (!bucket)
         return NULL;
 
@@ -257,12 +255,12 @@ void *AllocFromBucket(size_t size)
     return ptr;
 }
 
-void FreeFromBucket(void *ptr)
+void FreeFromBucket(MemoryHeap *heap, void *ptr)
 {
     DebugLog(">> FreeFromBucket(%p)\n", ptr);
 
     bool already_freed = false;
-    AllocationBucket *bucket = GetAllocationBucketOfPointer(ptr, &already_freed);
+    AllocationBucket *bucket = GetAllocationBucketOfPointer(heap, ptr, &already_freed);
     Assert(bucket != NULL && "Free: Invalid pointer");
 
     #if FT_MALLOC_DEBUG_LOG
@@ -286,11 +284,11 @@ void FreeFromBucket(void *ptr)
     FreeBucketSlot(bucket, ptr);
 }
 
-void *ReallocFromBucket(void *ptr, size_t new_size)
+void *ReallocFromBucket(MemoryHeap *heap, void *ptr, size_t new_size)
 {
     DebugLog(">> ReallocFromBucket(%p, %lu)\n", ptr, new_size);
 
-    AllocationBucket *bucket = GetAllocationBucketOfPointer(ptr, NULL);
+    AllocationBucket *bucket = GetAllocationBucketOfPointer(heap, ptr, NULL);
     Assert(bucket != NULL && "Realloc: Invalid pointer");
 
     new_size = Align64BitNumberToNextPowerOfTwo(new_size);
@@ -300,7 +298,7 @@ void *ReallocFromBucket(void *ptr, size_t new_size)
     if (new_size <= bucket->alloc_size)
         return ptr;
 
-    void *new_ptr = Allocate(new_size);
+    void *new_ptr = HeapAlloc(heap, new_size);
     size_t bytes_to_copy = bucket->alloc_size > new_size ? new_size : bucket->alloc_size;
     memcpy(new_ptr, ptr, bytes_to_copy);
     FreeBucketSlot(bucket, ptr);
@@ -308,12 +306,12 @@ void *ReallocFromBucket(void *ptr, size_t new_size)
     return new_ptr;
 }
 
-AllocationBucketStats GetBucketAllocationStats()
+AllocationBucketStats GetBucketAllocationStats(MemoryHeap *heap)
 {
     EnsureInitialized();
 
     AllocationBucketStats stats = {};
-    AllocationBucket *bucket = g_bucket_list;
+    AllocationBucket *bucket = heap->allocation_bucket_list;
     while (bucket)
     {
         stats.num_buckets += 1;
@@ -325,14 +323,14 @@ AllocationBucketStats GetBucketAllocationStats()
     return stats;
 }
 
-void PrintBucketAllocationState()
+void PrintBucketAllocationState(MemoryHeap *heap)
 {
     EnsureInitialized();
 
     int total_num_buckets = 0;
     int total_num_allocations = 0;
     size_t total_num_allocated_bytes = 0;
-    AllocationBucket *bucket = g_bucket_list;
+    AllocationBucket *bucket = heap->allocation_bucket_list;
     while (bucket)
     {
         total_num_buckets += 1;
@@ -343,7 +341,7 @@ void PrintBucketAllocationState()
 
     printf("Total number of buckets: %d\n", total_num_buckets);
     printf("Total number of allocations: %d, %lu bytes\n", total_num_allocations, total_num_allocated_bytes);
-    bucket = g_bucket_list;
+    bucket = heap->allocation_bucket_list;
     while (bucket)
     {
         printf(

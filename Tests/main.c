@@ -53,17 +53,17 @@ int main()
     if (!Test(10, malloc, free, realloc))
         return 1;
 
-    if (!Test(10, Allocate, Free, ResizeAllocation))
+    if (!Test(10, Alloc, Free, ResizeAlloc))
         return 1;
 
     if (!Test(50, malloc, free, realloc))
         return 1;
 
-    if (!Test(50, Allocate, Free, ResizeAllocation))
+    if (!Test(50, Alloc, Free, ResizeAlloc))
         return 1;
 
     PrintAllocationState();
-    CleanupAllocations();
+    DestroyGlobalHeap();
 
     return 0;
 }
