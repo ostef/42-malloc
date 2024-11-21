@@ -51,10 +51,10 @@ void *ReallocBig(MemoryHeap *heap, void *ptr, size_t new_size)
     BigAllocationHeader *header = GetBigAllocHeader(ptr);
 
     size_t total_size = header->size + sizeof(BigAllocationHeader);
-    size_t page_count = total_size / g_mmap_page_size + ((total_size % g_mmap_page_size) != 0);
+    size_t page_count = total_size / GetPageSize() + ((total_size % GetPageSize()) != 0);
 
     size_t new_total_size = new_size + sizeof(BigAllocationHeader);
-    size_t new_page_count = new_total_size / g_mmap_page_size + ((new_total_size % g_mmap_page_size) != 0);
+    size_t new_page_count = new_total_size / GetPageSize() + ((new_total_size % GetPageSize()) != 0);
 
     // If the allocated pages are enough to store new_size bytes,
     // just change the recorded size and don't move the memory
@@ -82,8 +82,6 @@ void CleanupBigAllocations(MemoryHeap *heap)
 
 BigAllocationStats GetBigAllocationStats(MemoryHeap *heap)
 {
-    EnsureInitialized();
-
     BigAllocationStats stats = {};
     BigAllocationHeader *alloc = heap->big_allocation_list;
     while (alloc)
@@ -98,8 +96,6 @@ BigAllocationStats GetBigAllocationStats(MemoryHeap *heap)
 
 void PrintBigAllocationState(MemoryHeap *heap)
 {
-    EnsureInitialized();
-
     int total_num_allocations = 0;
     size_t total_num_allocated_bytes = 0;
     BigAllocationHeader *alloc = heap->big_allocation_list;
@@ -115,7 +111,7 @@ void PrintBigAllocationState(MemoryHeap *heap)
     while (alloc)
     {
         size_t total_size = alloc->size + sizeof(BigAllocationHeader);
-        int page_count = total_size / g_mmap_page_size + ((total_size % g_mmap_page_size) != 0);
+        int page_count = total_size / GetPageSize() + ((total_size % GetPageSize()) != 0);
         printf(
             "Allocation(%p): %lu bytes, using %d pages\n",
             GetBigAllocPointer(alloc), alloc->size, page_count

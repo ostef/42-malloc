@@ -27,9 +27,7 @@
 #define DebugLog(...)
 #endif
 
-extern size_t g_mmap_page_size;
-
-void EnsureInitialized();
+size_t GetPageSize();
 
 static inline void VerifyList(ListNode *list)
 {
@@ -201,7 +199,7 @@ static inline uint64_t AlignNumber(uint64_t x, uint64_t align)
 
 static inline uint64_t AlignToPageSize(uint64_t x)
 {
-    return AlignNumber(x, g_mmap_page_size);
+    return AlignNumber(x, GetPageSize());
 }
 
 static inline void *AlignPointer(void *ptr, uint64_t align)

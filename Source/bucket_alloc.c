@@ -35,7 +35,7 @@ AllocationBucket *CreateAllocationBucket(MemoryHeap *heap, size_t alloc_size, un
     // Align page size to system page size
     size_t page_size = GetRequiredSizeForBucket(alloc_size, alloc_capacity);
     page_size = AlignToPageSize(page_size);
-    Assert((page_size % g_mmap_page_size) == 0);
+    Assert((page_size % GetPageSize()) == 0);
 
     // By aligning page size we might grow how much memory the bucket has
     // which means the alloc capacity might've increased, so we recalculate it
@@ -308,8 +308,6 @@ void *ReallocFromBucket(MemoryHeap *heap, void *ptr, size_t new_size)
 
 AllocationBucketStats GetBucketAllocationStats(MemoryHeap *heap)
 {
-    EnsureInitialized();
-
     AllocationBucketStats stats = {};
     AllocationBucket *bucket = heap->allocation_bucket_list;
     while (bucket)
@@ -325,8 +323,6 @@ AllocationBucketStats GetBucketAllocationStats(MemoryHeap *heap)
 
 void PrintBucketAllocationState(MemoryHeap *heap)
 {
-    EnsureInitialized();
-
     int total_num_buckets = 0;
     int total_num_allocations = 0;
     size_t total_num_allocated_bytes = 0;

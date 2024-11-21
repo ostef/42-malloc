@@ -4,25 +4,26 @@
 #include "malloc_internal.h"
 
 MemoryHeap global_heap;
-size_t g_mmap_page_size;
 
-void EnsureInitialized()
+size_t GetPageSize()
 {
-    if (g_mmap_page_size <= 0)
-        g_mmap_page_size = sysconf(_SC_PAGESIZE);
+    static size_t page_size = 0;
+
+    if (page_size <= 0)
+        page_size = sysconf(_SC_PAGESIZE);
+
+    return page_size;
 }
 
 void *HeapAlloc(MemoryHeap *heap, size_t size)
 {
-    EnsureInitialized();
-
     if (size > FT_MALLOC_MAX_SIZE)
         return NULL;
 
 #ifdef FT_MALLOC_BIG_SIZE_THRESHOLD
     size_t big_size_threshold = (size_t)FT_MALLOC_BIG_SIZE_THRESHOLD;
 #else
-    size_t big_size_threshold = g_mmap_page_size * FT_MALLOC_BIG_SIZE_PAGE_THRESHOLD;
+    size_t big_size_threshold = GetPageSize() * FT_MALLOC_BIG_SIZE_PAGE_THRESHOLD;
 #endif
 
     void *result = NULL;
@@ -38,8 +39,6 @@ void *HeapAlloc(MemoryHeap *heap, size_t size)
 
 void HeapFree(MemoryHeap *heap, void *ptr)
 {
-    EnsureInitialized();
-
     if (!ptr)
         return;
 
@@ -51,8 +50,6 @@ void HeapFree(MemoryHeap *heap, void *ptr)
 
 void *HeapResizeAlloc(MemoryHeap *heap, void *ptr, size_t new_size)
 {
-    EnsureInitialized();
-
     if (!ptr)
         return HeapAlloc(heap, new_size);
 
