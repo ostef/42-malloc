@@ -97,14 +97,13 @@ int main()
 {
     printf("Page size: %ld\n", sysconf(_SC_PAGESIZE));
 
-    // struct timespec time;
-    // clock_gettime(CLOCK_MONOTONIC, &time);
-    // srand(time.tv_sec * 1000000000 + time.tv_nsec);
+    struct timespec time;
+    clock_gettime(CLOCK_MONOTONIC, &time);
 
-    srand(0x12345);
+    srand(time.tv_sec * 1000000000 + time.tv_nsec);
     Test(10000, malloc, free, realloc);
 
-    srand(0x12345);
+    srand(time.tv_sec * 1000000000 + time.tv_nsec);
     Test(10000, Alloc, Free, ResizeAlloc);
 
     AllocationStats stats = GetAllocationStats();
