@@ -67,7 +67,7 @@ typedef struct
     uint64_t alignment_padding; // Padding for 16-byte alignment of result pointer
 } BigAllocationHeader;
 
-static_assert((sizeof(BigAllocationHeader) % FT_MALLOC_ALIGNMENT) == 0, "sizeof(AllocationBucket) is not a multiple of 16");
+static_assert((sizeof(BigAllocationHeader) % FT_MALLOC_ALIGNMENT) == 0, "sizeof(BigAllocationHeader) is not a multiple of 16");
 
 typedef struct {
     AllocationBucket *allocation_bucket_list;
