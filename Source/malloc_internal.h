@@ -6,6 +6,8 @@
 #include <string.h>
 #include <sys/mman.h>
 #include <unistd.h>
+#include <time.h>
+#include <stdio.h>
 
 #define FT_Stringify(x) FT_Stringify2(x)
 #define FT_Stringify2(x) #x
@@ -105,6 +107,14 @@ static inline uint64_t AlignToPageSize(uint64_t x)
 static inline void *AlignPointer(void *ptr, uint64_t align)
 {
     return (void *)AlignNumber((uint64_t)ptr, align);
+}
+
+static inline int64_t GetTime()
+{
+    struct timespec time;
+    clock_gettime(CLOCK_MONOTONIC, &time);
+
+    return time.tv_sec * 1000000000 + time.tv_nsec;
 }
 
 #endif

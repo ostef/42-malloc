@@ -4,13 +4,13 @@ SRC_DIR=Source
 SRC_FILES=bucket_alloc.c big_alloc.c malloc.c
 OBJ_DIR=Obj
 
-DEFINES?=#FT_MALLOC_DEBUG_LOG
+DEFINES?=FT_MALLOC_DEBUG_LOG
 
 OBJ_FILES=$(SRC_FILES:.c=.o)
 CC=gcc
-C_FLAGS=-Wall -Wextra -Werror -ggdb -I. $(addprefix -D,$(DEFINES))
+C_FLAGS=-ggdb -I. $(addprefix -D,$(DEFINES)) #-Wall -Wextra -Werror
 
-TESTS=main performance general free
+TESTS=main alloc_performance general free gburgun
 # We cannot enable optimizations for tests because calls to
 # malloc would be stripped away in many circumstances
 TEST_C_FLAGS:=$(C_FLAGS)

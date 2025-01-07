@@ -141,7 +141,11 @@ void *BucketAlloc(MemoryHeap *heap, size_t size)
 
     if (!bucket)
     {
+#ifdef FT_MALLOC_MIN_ALLOC_CAPACITY
         size_t capacity = FT_MALLOC_MIN_ALLOC_CAPACITY;
+#else
+        size_t capacity = size <= FT_MALLOC_MAX_SMALL_SIZE ? 100 : 10;
+#endif
         bucket = CreateAllocBucket(heap, size, capacity);
     }
 
