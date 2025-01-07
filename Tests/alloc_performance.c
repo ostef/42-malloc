@@ -38,6 +38,19 @@ void Test(
 int main()
 {
     printf("Page size: %ld\n", sysconf(_SC_PAGESIZE));
+    printf("Small size granularity=%d\n", FT_MALLOC_SMALL_SIZE_GRANULARITY);
+    printf("           class count=%d\n", FT_MALLOC_NUM_SMALL_SIZE_CLASS);
+    printf("           min=%d\n", FT_MALLOC_MIN_SMALL_SIZE);
+    printf("           max=%d\n", FT_MALLOC_MAX_SMALL_SIZE);
+
+    printf("Mid size   granularity=%d\n", FT_MALLOC_MID_SIZE_GRANULARITY);
+    printf("           class count=%d\n", FT_MALLOC_NUM_MID_SIZE_CLASS);
+    printf("           min=%d\n", FT_MALLOC_MIN_MID_SIZE);
+    printf("           max=%d\n", FT_MALLOC_MAX_MID_SIZE);
+
+    printf("Total size classes=%d\n", FT_MALLOC_NUM_SIZE_CLASS);
+
+    printf("Big size min=%d\n", FT_MALLOC_MIN_BIG_SIZE);
 
     Test(10, 10000, malloc, free, realloc);
     Test(10, 10000, Alloc, Free, Realloc);

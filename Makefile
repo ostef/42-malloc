@@ -4,7 +4,7 @@ SRC_DIR=Source
 SRC_FILES=bucket_alloc.c big_alloc.c malloc.c
 OBJ_DIR=Obj
 
-DEFINES?=FT_MALLOC_DEBUG_LOG
+DEFINES?=#FT_MALLOC_DEBUG_LOG
 
 OBJ_FILES=$(SRC_FILES:.c=.o)
 CC=gcc
