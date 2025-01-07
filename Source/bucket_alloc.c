@@ -1,373 +1,202 @@
-// @Todo: store buckets in linked list per size class
-// @Todo: use heuristics to know how big buckets should be
-
-#include <stdlib.h>
-#include <stdio.h>
-#include <stdio.h>
-
 #include "malloc_internal.h"
 
-#ifdef FT_MALLOC_DEBUG_LOG
-static inline void DebugLogBinaryNumber(uint32_t x)
+static int GetSizeClass(size_t size)
 {
-    int i = 0;
-    while (i < 32)
+    if (size >= FT_MALLOC_MIN_BIG_SIZE)
+        return -1;
+
+    if (size >= FT_MALLOC_MIN_MID_SIZE)
     {
-        DebugLog("%d", x & 1);
-        x >>= 1;
-        i += 1;
-    }
-}
-#else
-#define DebugLogBinaryNumber(x) (void)x
-#endif
+        size -= FT_MALLOC_MIN_MID_SIZE;
 
-size_t GetBucketBookkeepingSize(size_t num_alloc_capacity)
-{
-    size_t num_bytes = num_alloc_capacity / 8 + (num_alloc_capacity % 8 > 0);
-    size_t num_slots = num_bytes / sizeof(uint32_t) + (num_bytes % sizeof(uint32_t) > 0);
+        int index = (int)(size / FT_MALLOC_MID_SIZE_GRANULARITY);
+        index += GetSizeClass(FT_MALLOC_MAX_SMALL_SIZE);
 
-    return AlignNumber(num_slots * sizeof(uint32_t), FT_MALLOC_ALIGNMENT);
-}
-
-AllocationBucket *CreateAllocationBucket(MemoryHeap *heap, size_t alloc_size, unsigned int alloc_capacity)
-{
-    // Align page size to system page size
-    size_t page_size = GetRequiredSizeForBucket(alloc_size, alloc_capacity);
-    page_size = AlignToPageSize(page_size);
-    Assert((page_size % GetPageSize()) == 0);
-
-    // By aligning page size we might grow how much memory the bucket has
-    // which means the alloc capacity might've increased, so we recalculate it
-    while (sizeof(AllocationBucket) + GetBucketBookkeepingSize(alloc_capacity + 1) + (alloc_capacity + 1) * alloc_size < page_size)
-    {
-        alloc_capacity += 1;
+        return index;
     }
 
-    void *ptr = mmap(NULL, page_size, PROT_WRITE | PROT_READ, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
-    if (!ptr || ptr == MAP_FAILED)
-        return NULL;
+    if (size <= FT_MALLOC_MIN_SIZE)
+        return 0;
 
-    AllocationBucket *bucket = (AllocationBucket *)ptr;
-    *bucket = (AllocationBucket){};
-    ListNodePushFront((ListNode **)&heap->allocation_bucket_list, &bucket->node);
+    int index = 1 + (int)(size / FT_MALLOC_SMALL_SIZE_GRANULARITY);
 
-    bucket->alloc_size = alloc_size;
-    bucket->total_page_size = page_size;
-    bucket->num_alloc_capacity = alloc_capacity;
-    Assert(
-        GetBucketAllocationStartPointer(bucket) + bucket->alloc_size * bucket->num_alloc_capacity
-        <= (void *)bucket + page_size
-    );
+    return index;
+}
 
-    uint32_t *bookkeeping = GetBucketBookkeepingDataPointer(bucket);
-    size_t bookkeeping_size = GetBucketBookkeepingSize(bucket->num_alloc_capacity);
-    memset(bookkeeping, 0xff, bookkeeping_size);
+static size_t AlignSizeToSizeClass(size_t size)
+{
+    FT_Assert(size < FT_MALLOC_MIN_BIG_SIZE);
 
-#ifdef FT_MALLOC_POISON_MEMORY
-    void *memory_start = GetBucketAllocationStartPointer(bucket);
-    memset(memory_start, FT_MALLOC_MEMORY_PATTERN_NEVER_ALLOCATED, bucket->alloc_size * bucket->num_alloc_capacity);
+    if (size >= FT_MALLOC_MIN_MID_SIZE)
+    {
+        size -= FT_MALLOC_MIN_MID_SIZE;
+        size_t align = FT_MALLOC_MID_SIZE_GRANULARITY;
+        size = FT_MALLOC_MIN_MID_SIZE + ((size + align - 1) / align) * align;
+
+        return size;
+    }
+
+    if (size <= FT_MALLOC_MIN_SIZE)
+        return FT_MALLOC_MIN_SIZE;
+
+    size -= FT_MALLOC_MIN_SIZE;
+    size_t align = FT_MALLOC_SMALL_SIZE_GRANULARITY;
+    size = FT_MALLOC_MIN_SIZE + ((size + align - 1) / align) * align;
+
+    return size;
+}
+
+static AllocBucket **GetBucketList(MemoryHeap *heap, size_t size)
+{
+    return &heap->buckets_per_size_class[GetSizeClass(size)];
+}
+
+AllocBucket *CreateAllocBucket(MemoryHeap *heap, size_t size, size_t capacity)
+{
+    FT_DebugLog(">> CreateAllocBucket(%lu, %lu)\n", size, capacity);
+
+    size = AlignSizeToSizeClass(size);
+    size_t required_size = sizeof(AllocBucket) + (sizeof(AllocHeader) + size) * capacity;
+    size_t page_size = AlignToPageSize(required_size);
+    void *page = mmap(NULL, page_size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+
+    // Recalculate capacity because we may allocate more than needed
+    capacity = (page_size - sizeof(AllocBucket)) / (sizeof(AllocHeader) + size);
+
+    AllocBucket *bucket = (AllocBucket *)page;
+    *bucket = (AllocBucket){};
+    ListPushFront(GetBucketList(heap, size), bucket);
+
+    bucket->alloc_capacity = capacity;
+    bucket->alloc_size = size;
+
+    AllocHeader *node = (AllocHeader *)(bucket + 1);
+    bucket->free_blocks = node;
+
+    AllocHeader *prev = NULL;
+    for (size_t i = 0; i < bucket->alloc_capacity; i += 1)
+    {
+        if (prev)
+            prev->next = node;
+        node->prev = prev;
+
+        node->size = bucket->alloc_size;
+        node->bucket = bucket;
+
+#if FT_MALLOC_POISON_MEMORY
+        void *ptr = (void *)(node + 1);
+        memset(ptr, FT_MALLOC_MEMORY_PATTERN_NEVER_ALLOCATED, bucket->alloc_size);
 #endif
 
-    DebugLog("Created allocation bucket: alloc_size=%lu, page_size=%lu, num_alloc_capacity=%lu\n",
-        alloc_size, page_size, bucket->num_alloc_capacity);
+        if (i != bucket->alloc_capacity - 1)
+            node->next = (AllocHeader *)((void *)(node + 1) + size);
+        else
+            node->next = NULL;
+
+        prev = node;
+        node = node->next;
+    }
 
     return bucket;
 }
 
-void FreeAllocationBucket(MemoryHeap *heap, AllocationBucket *bucket)
+void DestroyAllocBucket(MemoryHeap *heap, AllocBucket *bucket)
 {
-    Assert(bucket != NULL);
-    Assert(bucket->num_alloc == 0 && "Freeing non empty allocation bucket");
+    size_t page_size = sizeof(AllocBucket) + (sizeof(AllocHeader) + bucket->alloc_size) * bucket->alloc_capacity;
+    page_size = AlignToPageSize(page_size);
+    ListPop(GetBucketList(heap, bucket->alloc_size), bucket);
 
-    ListNodePop((ListNode **)&heap->allocation_bucket_list, &bucket->node);
-
-    DebugLog("Freed allocation bucket: alloc_size=%lu, page_size=%lu, num_alloc_capacity=%lu\n",
-        bucket->alloc_size, bucket->total_page_size, bucket->num_alloc_capacity);
-
-    munmap(bucket, (size_t)bucket->total_page_size);
+    munmap(bucket, page_size);
 }
 
-void CleanupBucketAllocations(MemoryHeap *heap)
+static void *AllocFromBucket(AllocBucket *bucket)
 {
-    while (heap->allocation_bucket_list)
-    {
-        heap->allocation_bucket_list->num_alloc = 0;
-        FreeAllocationBucket(heap, heap->allocation_bucket_list);
-    }
-}
+    FT_DebugLog(">> AllocFromBucket(%lu)\n", bucket->alloc_size);
 
-size_t GetBucketNumAllocCapacityBeforehand(size_t total_page_size, size_t alloc_size)
-{
-    size_t avail_without_bucket = total_page_size - sizeof(AllocationBucket);
-    size_t num_alloc = (size_t)(avail_without_bucket / (alloc_size + 1.0 / sizeof(uint32_t)));
+    FT_Assert(bucket->free_blocks != NULL);
 
-    while (sizeof(AllocationBucket) + GetBucketBookkeepingSize(num_alloc) + num_alloc * alloc_size > total_page_size)
-    {
-        num_alloc -= 1;
-    }
+    AllocHeader *header = bucket->free_blocks;
+    ListPop(&bucket->free_blocks, header);
 
-    return num_alloc;
-}
+    ListPushFront(&bucket->occupied_blocks, header);
 
-size_t GetBucketNumAllocCapacity(AllocationBucket *bucket)
-{
-    return GetBucketNumAllocCapacityBeforehand(bucket->total_page_size, bucket->alloc_size);
-}
+    void *ptr = (void *)(header + 1);
 
-void *OccupyFirstFreeBucketSlot(AllocationBucket *bucket)
-{
-    uint32_t *bookkeeping = GetBucketBookkeepingDataPointer(bucket);
-    size_t num_bookkeeping_slots = GetBucketNumBookkeepingSlots(bucket->num_alloc_capacity);
-    void *memory = GetBucketAllocationStartPointer(bucket);
-
-    DebugLog("OccupyFirstFreeBucketSlot(num_alloc=%lu, num_alloc_capacity=%lu, num_bookkeeping_slots=%lu)\n",
-        bucket->num_alloc, bucket->num_alloc_capacity, num_bookkeeping_slots);
-
-    Assert(bucket->num_alloc < bucket->num_alloc_capacity);
-
-    for (size_t i = 0; i < num_bookkeeping_slots; i += 1)
-    {
-        // DebugLog("Iterating slot %lu\n", i);
-
-        int bit_index = BitScanForward32(bookkeeping[i]);
-        if (bit_index > 0)
-        {
-            bit_index -= 1;
-            size_t alloc_index = i * sizeof(uint32_t) * 8 + bit_index;
-
-            DebugLog("Found free slot: slot_index=%lu, bit_index=%d, alloc_index=%lu\n", i, bit_index, alloc_index);
-            DebugLog("bookkeeping[%lu]=", i);
-            DebugLogBinaryNumber(bookkeeping[i]);
-            DebugLog("\n");
-            DebugLog("bookkeeping[%lu], bit %d set to 0\n", i, bit_index);
-
-            bookkeeping[i] &= ~(1 << bit_index);
-
-            Assert(alloc_index < bucket->num_alloc_capacity);
-
-            bucket->num_alloc += 1;
-
-            return memory + alloc_index * bucket->alloc_size;
-        }
-    }
-
-    Assert(false && "Code path should be unreachable");
-
-    return NULL;
-}
-
-ssize_t GetPointerBucketAllocIndex(AllocationBucket *bucket, void *ptr)
-{
-    void *memory_start = GetBucketAllocationStartPointer(bucket);
-    void *memory_end = memory_start + bucket->alloc_size * bucket->num_alloc_capacity;
-
-    if (ptr < memory_start || ptr > memory_end - bucket->alloc_size)
-        return -1;
-
-    ssize_t alloc_index = (ptr - memory_start) / bucket->alloc_size;
-    Assert(((ptr - memory_start) % bucket->alloc_size) == 0 && "Pointer belongs to bucket but is not a valid allocation result");
-
-    return alloc_index;
-}
-
-void FreeBucketSlot(AllocationBucket *bucket, void *ptr)
-{
-    ssize_t alloc_index = GetPointerBucketAllocIndex(bucket, ptr);
-    Assert(alloc_index >= 0 && "Pointer was not allocated from this bucket");
-    size_t slot_index = (size_t)alloc_index / (sizeof(uint32_t) * 8);
-    size_t bit_index = (size_t)alloc_index % (sizeof(uint32_t) * 8);
-
-    uint32_t *bookkeeping = GetBucketBookkeepingDataPointer(bucket);
-    bool is_already_free = (bookkeeping[slot_index] >> bit_index) & 1;
-    Assert(!is_already_free && "Freeing memory that has already been freed or was never allocated");
-
-    DebugLog("Freeing slot at i=%lu, bit_index=%lu\n", slot_index, bit_index);
-    DebugLog("bookkeeping[%lu]=", slot_index);
-    DebugLogBinaryNumber(bookkeeping[slot_index]);
-    DebugLog("\n");
-
-    bookkeeping[slot_index] |= 1 << bit_index;
-    DebugLog("bookkeeping[%lu], bit %lu set to 1\n", slot_index, bit_index);
-
-    Assert(bucket->num_alloc > 0);
-    bucket->num_alloc -= 1;
-}
-
-bool PointerWasAllocatedFromBucket(void *ptr, AllocationBucket *bucket, bool *already_freed)
-{
-    ssize_t alloc_index = GetPointerBucketAllocIndex(bucket, ptr);
-    if (alloc_index < 0)
-        return false;
-
-    size_t slot_index = (size_t)alloc_index / (sizeof(uint32_t) * 8);
-    size_t bit_index = (size_t)alloc_index % (sizeof(uint32_t) * 8);
-
-    uint32_t *bookkeeping = GetBucketBookkeepingDataPointer(bucket);
-    bool is_free = (bookkeeping[slot_index] >> bit_index) & 1;
-    if (already_freed)
-    {
-        *already_freed = is_free;
-        return true;
-    }
-
-    return !is_free;
-}
-
-AllocationBucket *GetAllocationBucketOfPointer(MemoryHeap *heap, void *ptr, bool *already_freed)
-{
-    AllocationBucket *bucket = heap->allocation_bucket_list;
-    while (bucket)
-    {
-        if (PointerWasAllocatedFromBucket(ptr, bucket, already_freed))
-            return bucket;
-
-        bucket = (AllocationBucket *)bucket->node.next;
-    }
-
-    if (already_freed)
-        *already_freed = false;
-
-    return NULL;
-}
-
-AllocationBucket *GetAvailableAllocationBucketForSize(MemoryHeap *heap, size_t size)
-{
-    size = Align64BitNumberToNextPowerOfTwo(size);
-    if (size < FT_MALLOC_MIN_SIZE)
-        size = FT_MALLOC_MIN_SIZE;
-
-    AllocationBucket *bucket = heap->allocation_bucket_list;
-    while (bucket)
-    {
-        if (size == bucket->alloc_size && bucket->num_alloc < bucket->num_alloc_capacity)
-            return bucket;
-
-        bucket = (AllocationBucket *)bucket->node.next;
-    }
-
-    unsigned int alloc_capacity = FT_MALLOC_MIN_ALLOC_CAPACITY;
-
-    return CreateAllocationBucket(heap, size, alloc_capacity);
-}
-
-void *AllocFromBucket(MemoryHeap *heap, size_t size)
-{
-    DebugLog(">> AllocFromBucket(%lu)\n", size);
-
-    AllocationBucket *bucket = GetAvailableAllocationBucketForSize(heap, size);
-    if (!bucket)
-        return NULL;
-
-    void *ptr = OccupyFirstFreeBucketSlot(bucket);
-
-#ifdef FT_MALLOC_POISON_MEMORY
+#if FT_MALLOC_POISON_MEMORY
     memset(ptr, FT_MALLOC_MEMORY_PATTERN_ALLOCATED_UNTOUCHED, bucket->alloc_size);
 #endif
 
     return ptr;
 }
 
-void FreeFromBucket(MemoryHeap *heap, void *ptr)
+void *BucketAlloc(MemoryHeap *heap, size_t size)
 {
-    DebugLog(">> FreeFromBucket(%p)\n", ptr);
+    FT_DebugLog(">> BucketAlloc(%lu)\n", size);
 
-    bool already_freed = false;
-    AllocationBucket *bucket = GetAllocationBucketOfPointer(heap, ptr, &already_freed);
-    Assert(bucket != NULL && "Free: Invalid pointer");
-
-    #if FT_MALLOC_DEBUG_LOG
-    if (already_freed)
+    AllocBucket *bucket = *GetBucketList(heap, size);
+    while (bucket && bucket->free_blocks == NULL)
     {
-        ssize_t alloc_index = GetPointerBucketAllocIndex(bucket, ptr);
-        size_t slot_index = (size_t)alloc_index / (sizeof(uint32_t) * 8);
-        size_t bit_index = (size_t)alloc_index % (sizeof(uint32_t) * 8);
-
-        DebugLog("Double free: alloc_index=%ld, slot_index=%lu, bit_index=%lu\n", alloc_index, slot_index, bit_index);
-
-        uint32_t *bookkeeping = GetBucketBookkeepingDataPointer(bucket);
-        DebugLog("bookkeeping[%lu]=", slot_index);
-        DebugLogBinaryNumber(bookkeeping[slot_index]);
-        DebugLog("\n");
+        bucket = bucket->next;
     }
-    #endif
 
-    Assert(!already_freed && "Free: Double free");
+    if (!bucket)
+    {
+        size_t capacity = FT_MALLOC_MIN_ALLOC_CAPACITY;
+        bucket = CreateAllocBucket(heap, size, capacity);
+    }
 
-    FreeBucketSlot(bucket, ptr);
-
-#ifdef FT_MALLOC_POISON_MEMORY
-    memset(ptr, FT_MALLOC_MEMORY_PATTERN_FREED, bucket->alloc_size);
-#endif
+    return AllocFromBucket(bucket);
 }
 
-void *ReallocFromBucket(MemoryHeap *heap, void *ptr, size_t new_size)
+void *BucketRealloc(MemoryHeap *heap, void *ptr, size_t new_size)
 {
-    DebugLog(">> ReallocFromBucket(%p, %lu)\n", ptr, new_size);
+    FT_DebugLog(">> BucketRealloc(%lu)\n", new_size);
 
-    AllocationBucket *bucket = GetAllocationBucketOfPointer(heap, ptr, NULL);
-    Assert(bucket != NULL && "Realloc: Invalid pointer");
+    AllocHeader *header = ((AllocHeader *)ptr) - 1;
+    AllocBucket *bucket = header->bucket;
+    FT_Assert(bucket != NULL);
 
-    new_size = Align64BitNumberToNextPowerOfTwo(new_size);
-    if (new_size < FT_MALLOC_MIN_SIZE)
-        new_size = FT_MALLOC_MIN_SIZE;
-
-    if (new_size <= bucket->alloc_size)
-    {
-#ifdef FT_MALLOC_POISON_MEMORY
-        memset(ptr + new_size, FT_MALLOC_MEMORY_PATTERN_FREED, bucket->alloc_size - new_size);
-#endif
-
+    int size_class = GetSizeClass(header->size);
+    int new_size_class = GetSizeClass(new_size);
+    if (size_class == new_size_class)
         return ptr;
-    }
 
     void *new_ptr = HeapAlloc(heap, new_size);
-    size_t bytes_to_copy = bucket->alloc_size > new_size ? new_size : bucket->alloc_size;
-    memcpy(new_ptr, ptr, bytes_to_copy);
+    size_t copy_size = new_size > header->size ? header->size : new_size;
+    memcpy(new_ptr, ptr, copy_size);
 
-    FreeBucketSlot(bucket, ptr);
+    BucketFree(heap, ptr);
 
     return new_ptr;
 }
 
-AllocationBucketStats GetBucketAllocationStats(MemoryHeap *heap)
+void BucketFree(MemoryHeap *heap, void *ptr)
 {
-    AllocationBucketStats stats = {};
-    AllocationBucket *bucket = heap->allocation_bucket_list;
-    while (bucket)
-    {
-        stats.num_buckets += 1;
-        stats.num_allocations += bucket->num_alloc;
-        stats.num_allocated_bytes += bucket->num_alloc * bucket->alloc_size;
-        bucket = (AllocationBucket *)bucket->node.next;
-    }
+    FT_DebugLog(">> BucketFree()\n");
 
-    return stats;
+    (void)heap;
+    AllocHeader *header = ((AllocHeader *)ptr) - 1;
+    AllocBucket *bucket = header->bucket;
+    FT_Assert(bucket != NULL);
+    ListPop(&bucket->occupied_blocks, header);
+    ListPushFront(&bucket->free_blocks, header);
+
+#if FT_MALLOC_POISON_MEMORY
+    memset(ptr, FT_MALLOC_MEMORY_PATTERN_FREED, bucket->alloc_size);
+#endif
 }
 
-void PrintBucketAllocationState(MemoryHeap *heap)
+void CleanupBucketAllocations(MemoryHeap *heap)
 {
-    int total_num_buckets = 0;
-    int total_num_allocations = 0;
-    size_t total_num_allocated_bytes = 0;
-    AllocationBucket *bucket = heap->allocation_bucket_list;
-    while (bucket)
+    for (int i = 0; i < FT_MALLOC_NUM_SIZE_CLASS; i += 1)
     {
-        total_num_buckets += 1;
-        total_num_allocations += bucket->num_alloc;
-        total_num_allocated_bytes += bucket->num_alloc * bucket->alloc_size;
-        bucket = (AllocationBucket *)bucket->node.next;
-    }
+        AllocBucket *bucket = heap->buckets_per_size_class[i];
+        while (bucket)
+        {
+            AllocBucket *next = bucket->next;
+            DestroyAllocBucket(heap, bucket);
 
-    printf("Total number of buckets: %d\n", total_num_buckets);
-    printf("Total number of allocations: %d, %lu bytes\n", total_num_allocations, total_num_allocated_bytes);
-    bucket = heap->allocation_bucket_list;
-    while (bucket)
-    {
-        printf(
-            "Bucket(%p): alloc_size=%lu, total_page_size=%lu, num_alloc=%lu, num_alloc_capacity=%lu, num_allocated_bytes=%lu\n",
-            bucket, bucket->alloc_size, bucket->total_page_size, bucket->num_alloc, bucket->num_alloc_capacity, bucket->num_alloc * bucket->alloc_size
-        );
-        bucket = (AllocationBucket *)bucket->node.next;
+            bucket = next;
+        }
     }
 }

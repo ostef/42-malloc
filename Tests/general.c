@@ -104,7 +104,7 @@ int main()
     Test(10000, malloc, free, realloc);
 
     srand(time.tv_sec * 1000000000 + time.tv_nsec);
-    Test(10000, Alloc, Free, ResizeAlloc);
+    Test(10000, Alloc, Free, Realloc);
 
     AllocationStats stats = GetAllocationStats();
     if (stats.num_allocations > 0 || stats.num_allocated_bytes > 0)

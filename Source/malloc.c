@@ -1,9 +1,4 @@
-#include <stdio.h>
-
-#include "malloc.h"
 #include "malloc_internal.h"
-
-MemoryHeap global_heap;
 
 size_t GetPageSize()
 {
@@ -15,138 +10,179 @@ size_t GetPageSize()
     return page_size;
 }
 
+MemoryHeap *CreateHeap()
+{
+    MemoryHeap *heap = mmap(NULL, sizeof(MemoryHeap), PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    memset(heap, 0, sizeof(MemoryHeap));
+
+    return heap;
+}
+
+void DestroyHeap(MemoryHeap *heap)
+{
+    CleanupBigAllocations(heap);
+    CleanupBucketAllocations(heap);
+    munmap((void *)heap, sizeof(MemoryHeap));
+}
+
 void *HeapAlloc(MemoryHeap *heap, size_t size)
 {
     if (size > FT_MALLOC_MAX_SIZE)
         return NULL;
+    if (size == 0)
+        return NULL;
 
-#ifdef FT_MALLOC_BIG_SIZE_THRESHOLD
-    size_t big_size_threshold = (size_t)FT_MALLOC_BIG_SIZE_THRESHOLD;
-#else
-    size_t big_size_threshold = GetPageSize() * FT_MALLOC_BIG_SIZE_PAGE_THRESHOLD;
-#endif
+    if (size >= FT_MALLOC_MIN_BIG_SIZE)
+        return AllocBig(heap, size);
 
-    void *result = NULL;
-    if (size >= big_size_threshold)
-        result = AllocBig(heap, size);
-    else
-        result = AllocFromBucket(heap, size);
-
-    Assert(((uint64_t)result % FT_MALLOC_ALIGNMENT) == 0 && "Result pointer is not 16-byte aligned");
-
-    return result;
+    return BucketAlloc(heap, size);
 }
 
-void HeapFree(MemoryHeap *heap, void *ptr)
+void *HeapRealloc(MemoryHeap *heap, void *ptr, size_t new_size)
 {
-    if (!ptr)
-        return;
-
-    if (IsBigAllocation(heap, ptr))
-        FreeBig(heap, ptr);
-    else
-        FreeFromBucket(heap, ptr);
-}
-
-void *HeapResizeAlloc(MemoryHeap *heap, void *ptr, size_t new_size)
-{
-    if (!ptr)
-        return HeapAlloc(heap, new_size);
-
     if (new_size > FT_MALLOC_MAX_SIZE)
     {
         HeapFree(heap, ptr);
         return NULL;
     }
 
-    if (IsBigAllocation(heap, ptr))
+    if (new_size == 0)
+    {
+        HeapFree(heap, ptr);
+        return NULL;
+    }
+
+    if (ptr == NULL)
+        return HeapAlloc(heap, new_size);
+
+    AllocHeader *header = (AllocHeader *)ptr - 1;
+    if (header->bucket == NULL)
         return ReallocBig(heap, ptr, new_size);
-    else
-        return ReallocFromBucket(heap, ptr, new_size);
+
+    return BucketRealloc(heap, ptr, new_size);
 }
 
-void DestroyHeap(MemoryHeap *heap)
+void HeapFree(MemoryHeap *heap, void *ptr)
 {
-    CleanupBucketAllocations(heap);
-    CleanupBigAllocations(heap);
+    if (ptr == NULL)
+        return;
+
+    AllocHeader *header = (AllocHeader *)ptr - 1;
+    if (header->bucket == NULL)
+        FreeBig(heap, ptr);
+    else
+        BucketFree(heap, ptr);
 }
+
+MemoryHeap *global_heap;
 
 void *Alloc(size_t size)
 {
-    return HeapAlloc(&global_heap, size);
+    if (!global_heap)
+        global_heap = CreateHeap();
+
+    return HeapAlloc(global_heap, size);
+}
+
+void *Realloc(void *ptr, size_t new_size)
+{
+    if (!global_heap)
+        global_heap = CreateHeap();
+
+    return HeapRealloc(global_heap, ptr, new_size);
 }
 
 void Free(void *ptr)
 {
-    HeapFree(&global_heap, ptr);
-}
+    if (!global_heap)
+        global_heap = CreateHeap();
 
-void *ResizeAlloc(void *ptr, size_t new_size)
-{
-    return HeapResizeAlloc(&global_heap, ptr, new_size);
+    HeapFree(global_heap, ptr);
 }
 
 void DestroyGlobalHeap()
 {
-    DestroyHeap(&global_heap);
+    DestroyHeap(global_heap);
 }
 
-AllocationStats GetHeapAllocationStats(MemoryHeap *heap)
+static inline void VerifyList(ListNode *list)
 {
-    AllocationStats stats = {};
-    stats.bucket_stats = GetBucketAllocationStats(heap);
-    stats.big_alloc_stats = GetBigAllocationStats(heap);
-    stats.num_allocations = stats.bucket_stats.num_allocations
-        + stats.big_alloc_stats.num_allocations;
-    stats.num_allocated_bytes = stats.bucket_stats.num_allocated_bytes
-        + stats.big_alloc_stats.num_allocated_bytes;
+    while (list)
+    {
+        if (list->prev)
+            FT_Assert(list->prev->next == list);
+        if (list->next)
+            FT_Assert(list->next->prev == list);
 
-    return stats;
+        list = list->next;
+    }
+}
+
+void ListNodePushFront(ListNode **list_front, ListNode *node)
+{
+    FT_Assert(node->prev == NULL);
+    FT_Assert(node->next == NULL);
+
+#ifdef VERIFY_LIST
+    if (*list_front)
+        VerifyList(*list_front);
+#endif
+
+    if (*list_front)
+    {
+        node->next = *list_front;
+        (*list_front)->prev = node;
+    }
+
+    *list_front = node;
+
+#ifdef VERIFY_LIST
+    FT_Assert(*list_front != NULL);
+    VerifyList(*list_front);
+#endif
+}
+
+void ListNodePop(ListNode **list_front, ListNode *node)
+{
+    if (node->prev)
+        FT_Assert(node->prev->next == node);
+    if (node->next)
+        FT_Assert(node->next->prev == node);
+
+    ListNode *prev = node->prev;
+    ListNode *next = node->next;
+
+#ifdef VERIFY_LIST
+    FT_Assert(*list_front != NULL);
+    VerifyList(*list_front);
+#endif
+
+    if (prev)
+        prev->next = next;
+
+    if (next)
+        next->prev = prev;
+
+    if (*list_front == node)
+    {
+        FT_Assert(prev == NULL);
+        *list_front = next;
+    }
+
+    node->prev = NULL;
+    node->next = NULL;
+
+#ifdef VERIFY_LIST
+    if (*list_front)
+        VerifyList(*list_front);
+#endif
 }
 
 AllocationStats GetAllocationStats()
 {
-    return GetHeapAllocationStats(&global_heap);
-}
-
-// @Todo: replace printf (we're supposed to replace malloc, it would be
-// weird to use functions that use malloc)
-// Also we don't want to depend on stdio.h
-
-void PrintHeapAllocationState(MemoryHeap *heap)
-{
-    printf("=== Small and medium allocations (bucket allocator) ===\n");
-    PrintBucketAllocationState(heap);
-
-    printf("\n=== Big allocations ===\n");
-    PrintBigAllocationState(heap);
+    return (AllocationStats){};
 }
 
 void PrintAllocationState()
 {
-    PrintHeapAllocationState(&global_heap);
 }
-
-void show_alloc_mem()
-{
-    PrintAllocationState();
-}
-
-#ifdef FT_MALLOC_OVERRIDE_LIBC_MALLOC
-
-void *malloc(size_t size)
-{
-    return Alloc(size);
-}
-
-void free(void *ptr)
-{
-    Free(ptr);
-}
-
-void *realloc(void *ptr, size_t new_size)
-{
-    return ResizeAlloc(ptr, new_size);
-}
-
-#endif

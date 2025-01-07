@@ -55,13 +55,13 @@ int main()
     if (!Test(10, malloc, free, realloc))
         return 1;
 
-    if (!Test(10, Alloc, Free, ResizeAlloc))
+    if (!Test(10, Alloc, Free, Realloc))
         return 1;
 
     if (!Test(50, malloc, free, realloc))
         return 1;
 
-    if (!Test(50, Alloc, Free, ResizeAlloc))
+    if (!Test(50, Alloc, Free, Realloc))
         return 1;
 
     PrintAllocationState();
