@@ -55,14 +55,6 @@ typedef struct ListNode {
     struct ListNode *next;
 } ListNode;
 
-void ListNodePushFront(ListNode **list_front, ListNode *node);
-void ListNodePushAfter(ListNode **list_front, ListNode *node, ListNode *after);
-void ListNodePop(ListNode **list_front, ListNode *node);
-
-#define ListPushFront(list, node) ListNodePushFront((ListNode **)list, (ListNode *)node)
-#define ListPushAfter(list, node, after) ListNodePushAfter((ListNode **)list, (ListNode *)node, (ListNode *)after)
-#define ListPop(list, node) ListNodePop((ListNode **)list, (ListNode *)node)
-
 typedef struct BlockHeader {
     struct BlockHeader *prev;
     struct BlockHeader *next;
@@ -82,7 +74,7 @@ typedef struct Bucket {
     uint32_t highest_available_size;
     uint32_t num_pages;
     uint32_t flags;
-    uint32_t padding;
+    uint32_t num_allocations;
 } Bucket;
 
 typedef struct Heap {
@@ -91,31 +83,9 @@ typedef struct Heap {
     Bucket *free_small_buckets;
     Bucket *full_small_buckets;
     BlockHeader *large_allocations;
+    size_t num_large_allocations;
 } Heap;
 
-Bucket *CreateBucket(uint32_t num_pages);
-void DestroyBucket(Bucket *bucket);
-
-Bucket *CreateTinyBucket(Heap *heap);
-void DestroyTinyBucket(Heap *heap, Bucket *bucket);
-
-Bucket *CreateSmallBucket(Heap *heap);
-void DestroySmallBucket(Heap *heap, Bucket *bucket);
-
-Bucket *FindBucket(Bucket *list, size_t alloc_size);
-
-void *AllocFromBucket(Bucket *bucket, size_t size);
-void FreeFromBucket(BlockHeader *block);
-bool ResizeAllocFromBucket(BlockHeader *block, size_t new_size);
-
-void *AllocLarge(Heap *heap, size_t size);
-void FreeLarge(Heap *heap, BlockHeader *block);
-
-void *HeapAlloc(Heap *heap, size_t size);
-void HeapFree(Heap *heap, void *ptr);
-
-void PrintBlockInfo(BlockHeader *block);
-void PrintBucketInfo(Bucket *bucket);
-void PrintHeapInfo(Heap *heap);
+extern Heap g_heap;
 
 #endif

@@ -5,7 +5,7 @@ SRC_DIR=Source
 INCLUDE_DIRS=.
 BUILD_DIR=.build
 
-SRC_FILES=malloc.c
+SRC_FILES=malloc.c print.c
 DEP_FILES=$(addsuffix .d,$(SRC_FILES))
 OBJ_FILES=$(addsuffix .o,$(SRC_FILES))
 
@@ -20,7 +20,7 @@ all: $(TARGET) $(TEST_TARGET)
 
 $(BUILD_DIR)/%.c.o: $(SRC_DIR)/%.c
 	@mkdir -p $(@D)
-	$(CC) $(C_FLAGS) $(addprefix -D,$(DEFINES)) -MMD -MP -MF$(BUILD_DIR)/$*.c.d $(addprefix -I,$(INCLUDE_DIRS)) -c $< -o $@
+	$(CC) $(C_FLAGS) -fPIC $(addprefix -D,$(DEFINES)) -MMD -MP -MF$(BUILD_DIR)/$*.c.d $(addprefix -I,$(INCLUDE_DIRS)) -c $< -o $@
 
 $(TARGET): $(addprefix $(BUILD_DIR)/,$(OBJ_FILES))
 	$(CC) -shared $(addprefix $(BUILD_DIR)/,$(OBJ_FILES)) $(addprefix -L,$(LIB_DIRS) $(LIB_DIRS)) $(addprefix -l,$(LIBS) $(LIBS)) -o $@

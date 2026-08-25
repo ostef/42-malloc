@@ -71,6 +71,8 @@ int main(void) {
         allocations[i].data = result;
     }
 
+    show_alloc_mem();
+
     print("Reallocating\n");
     for (size_t n = 0; n < REALLOC_COUNT; ++n) {
         size_t i = rand() % ALLOC_COUNT;
@@ -97,6 +99,8 @@ int main(void) {
     }
 
     unoptimized_free(NULL);
+
+    show_alloc_mem();
 
     print("Checking content\n");
     for (size_t i = 0; i < ALLOC_COUNT; ++i) {

@@ -1,11 +1,53 @@
 #include "ft_malloc_internal.h"
 
 #include <stdbool.h>
-#include <stdio.h>
-#include <errno.h>
 #include <string.h>
 #include <unistd.h>
 #include <sys/mman.h>
+
+Heap g_heap;
+
+static void ListNodePushFront(ListNode **list_front, ListNode *node);
+static void ListNodePushAfter(ListNode **list_front, ListNode *node, ListNode *after);
+static void ListNodePop(ListNode **list_front, ListNode *node);
+
+#define ListPushFront(list, node) ListNodePushFront((ListNode **)list, (ListNode *)node)
+#define ListPushAfter(list, node, after) ListNodePushAfter((ListNode **)list, (ListNode *)node, (ListNode *)after)
+#define ListPop(list, node) ListNodePop((ListNode **)list, (ListNode *)node)
+
+static Bucket *CreateBucket(uint32_t num_pages);
+// static void DestroyBucket(Bucket *bucket);
+
+static Bucket *CreateTinyBucket(Heap *heap);
+// static void DestroyTinyBucket(Heap *heap, Bucket *bucket);
+
+static Bucket *CreateSmallBucket(Heap *heap);
+// static void DestroySmallBucket(Heap *heap, Bucket *bucket);
+
+static Bucket *FindBucket(Bucket *list, size_t alloc_size);
+
+static void *AllocFromBucket(Bucket *bucket, size_t size);
+static void FreeFromBucket(BlockHeader *block);
+static bool ResizeAllocFromBucket(BlockHeader *block, size_t new_size);
+
+static void *AllocLarge(Heap *heap, size_t size);
+static void FreeLarge(Heap *heap, BlockHeader *block);
+
+static void *HeapAlloc(Heap *heap, size_t size);
+static void *HeapRealloc(Heap *heap, void *ptr, size_t new_size);
+static void HeapFree(Heap *heap, void *ptr);
+
+void *ft_malloc(size_t size) {
+    return HeapAlloc(&g_heap, size);
+}
+
+void *ft_realloc(void *ptr, size_t size) {
+    return HeapRealloc(&g_heap, ptr, size);
+}
+
+void ft_free(void *ptr) {
+    HeapFree(&g_heap, ptr);
+}
 
 static inline
 void VerifyList(ListNode *list) {
@@ -120,7 +162,6 @@ Bucket *CreateBucket(uint32_t num_pages) {
     size_t total_size = num_pages * GetPageSize();
     Bucket *bucket = mmap(NULL, total_size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANON, -1, 0);
     if (!bucket || bucket == MAP_FAILED) {
-        printf("Error: %s\n", strerror(errno));
         return NULL;
     }
 
@@ -142,17 +183,17 @@ Bucket *CreateBucket(uint32_t num_pages) {
     return bucket;
 }
 
-void DestroyBucket(Bucket *bucket) {
-    size_t total_size = bucket->num_pages * GetPageSize();
-    munmap(bucket, total_size);
-}
+// void DestroyBucket(Bucket *bucket) {
+//     size_t total_size = bucket->num_pages * GetPageSize();
+//     munmap(bucket, total_size);
+// }
 
 static inline
 Bucket *CreateBucketForMaxSize(uint32_t max_size, uint32_t num_min_blocks) {
     size_t total_size = sizeof(Bucket) + (max_size + sizeof(BlockHeader)) * num_min_blocks;
     uint32_t num_pages = AlignForward(total_size, GetPageSize()) / GetPageSize();
 
-    return  CreateBucket(num_pages);
+    return CreateBucket(num_pages);
 }
 
 Bucket *CreateTinyBucket(Heap *heap) {
@@ -169,12 +210,12 @@ Bucket *CreateTinyBucket(Heap *heap) {
     return bucket;
 }
 
-void DestroyTinyBucket(Heap *heap, Bucket *bucket) {
-    FT_DebugLog("Destroying tiny bucket\n");
+// void DestroyTinyBucket(Heap *heap, Bucket *bucket) {
+//     FT_DebugLog("Destroying tiny bucket\n");
 
-    ListPop(&heap->free_tiny_buckets, bucket);
-    DestroyBucket(bucket);
-}
+//     ListPop(&heap->free_tiny_buckets, bucket);
+//     DestroyBucket(bucket);
+// }
 
 Bucket *CreateSmallBucket(Heap *heap) {
     FT_DebugLog("Creating small bucket\n");
@@ -189,12 +230,12 @@ Bucket *CreateSmallBucket(Heap *heap) {
     return bucket;
 }
 
-void DestroySmallBucket(Heap *heap, Bucket *bucket) {
-    FT_DebugLog("Destroying small bucket\n");
+// void DestroySmallBucket(Heap *heap, Bucket *bucket) {
+//     FT_DebugLog("Destroying small bucket\n");
 
-    ListPop(&heap->free_small_buckets, bucket);
-    DestroyBucket(bucket);
-}
+//     ListPop(&heap->free_small_buckets, bucket);
+//     DestroyBucket(bucket);
+// }
 
 Bucket *FindBucket(Bucket *list, size_t alloc_size) {
     Bucket *bucket = list;
@@ -349,6 +390,7 @@ void *AllocFromBucket(Bucket *bucket, size_t size) {
 
     PopFreeBlock(bucket, block);
     ListPushFront(&bucket->occupied_blocks, block);
+    bucket->num_allocations += 1;
 
     return block + 1;
 }
@@ -358,6 +400,7 @@ void FreeFromBucket(BlockHeader *block) {
     FT_Assert(bucket != NULL);
 
     ListPop(&bucket->occupied_blocks, block);
+    bucket->num_allocations -= 1;
 
     PushFreeBlockAndCoalesce(bucket, block);
 }
@@ -403,7 +446,6 @@ void *AllocLarge(Heap *heap, size_t size) {
     size_t total_size = AlignForward(size + sizeof(BlockHeader), GetPageSize());
     BlockHeader *block = mmap(NULL, total_size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANON, -1, 0);
     if (!block || block == MAP_FAILED) {
-        printf("Error: %s\n", strerror(errno));
         return NULL;
     }
 
@@ -413,12 +455,14 @@ void *AllocLarge(Heap *heap, size_t size) {
     block->size = total_size - sizeof(BlockHeader);
 
     ListPushFront(&heap->large_allocations, block);
+    heap->num_large_allocations += 1;
 
     return block + 1;
 }
 
 void FreeLarge(Heap *heap, BlockHeader *block) {
     ListPop(&heap->large_allocations, block);
+    heap->num_large_allocations -= 1;
 
     size_t total_size = block->size + sizeof(BlockHeader);
     munmap(block, total_size);
@@ -487,10 +531,8 @@ void *HeapRealloc(Heap *heap, void *ptr, size_t new_size) {
         }
     }
 
-    if (block->bucket) {
-        if (ResizeAllocFromBucket(block, new_size)) {
-            return ptr;
-        }
+    if (block->bucket && ResizeAllocFromBucket(block, new_size)) {
+        return ptr;
     }
 
     void *new_ptr = HeapAlloc(heap, new_size);
@@ -529,82 +571,5 @@ void HeapFree(Heap *heap, void *ptr) {
         }
     } else {
         FreeLarge(heap, block);
-    }
-}
-
-static Heap g_heap;
-
-void *ft_malloc(size_t size) {
-    return HeapAlloc(&g_heap, size);
-}
-
-void *ft_realloc(void *ptr, size_t size) {
-    return HeapRealloc(&g_heap, ptr, size);
-}
-
-void ft_free(void *ptr) {
-    HeapFree(&g_heap, ptr);
-}
-
-void show_alloc_mem() {
-    PrintHeapInfo(&g_heap);
-}
-
-void PrintBlockInfo(BlockHeader *block) {
-    printf("  Block: (%p) %p - %p, %u bytes\n", block, block + 1, (void *)(block + 1) + block->size, (uint32_t)block->size);
-}
-
-void PrintBucketInfo(Bucket *bucket) {
-    printf("Bucket: num_pages=%u, highest_available_size=%u\n", bucket->num_pages, bucket->highest_available_size);
-
-    BlockHeader *block = bucket->free_blocks;
-    printf(" Free blocks:\n");
-    while (block) {
-        PrintBlockInfo(block);
-        block = block->next;
-    }
-
-    block = bucket->occupied_blocks;
-    printf(" Occupied blocks:\n");
-    while(block) {
-        PrintBlockInfo(block);
-        block = block->next;
-    }
-}
-
-void PrintHeapInfo(Heap *heap) {
-    printf("\nFree tiny buckets:\n");
-    Bucket *bucket = heap->free_tiny_buckets;
-    while (bucket) {
-        PrintBucketInfo(bucket);
-        bucket = bucket->next;
-    }
-
-    printf("\nFull tiny buckets:\n");
-    bucket = heap->full_tiny_buckets;
-    while (bucket) {
-        PrintBucketInfo(bucket);
-        bucket = bucket->next;
-    }
-
-    printf("\nFree small buckets:\n");
-    bucket = heap->free_small_buckets;
-    while (bucket) {
-        PrintBucketInfo(bucket);
-        bucket = bucket->next;
-    }
-
-    printf("\nFull small buckets:\n");
-    bucket = heap->full_small_buckets;
-    while (bucket) {
-        PrintBucketInfo(bucket);
-        bucket = bucket->next;
-    }
-
-    printf("\nLarge allocations:\n");
-    BlockHeader *block = heap->large_allocations;
-    while (block) {
-        PrintBlockInfo(block);
-        block = block->next;
     }
 }
