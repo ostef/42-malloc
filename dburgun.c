@@ -61,6 +61,8 @@ int main(void) {
         char* result = (char*)ft_malloc(size);
         assert((size == 0 || result != NULL) && "Memory allocation failed");
 
+        assert((uintptr_t)result % 16 == 0 && "Memory is not aligned to 16 bytes");
+
         allocations[i].seed = rand();
         srand(allocations[i].seed);
         for (size_t j = 0; j < size; ++j)
@@ -76,6 +78,8 @@ int main(void) {
         size_t new_size = next_alloc_size();
         allocations[i].data = ft_realloc(allocations[i].data, new_size);
         assert((new_size == 0 || allocations[i].data != NULL) && "Memory reallocation failed");
+
+        assert((uintptr_t)allocations[i].data % 16 == 0 && "Memory is not aligned to 16 bytes");
 
         size_t size = allocations[i].size;
         if (new_size < size)
