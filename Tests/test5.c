@@ -12,11 +12,11 @@ void print(char *s)
 
 int main()
 {
-	// char *addr;
+	char *addr;
 
-	// addr = malloc(16);
-	// free(NULL);
-	// free((void *)addr + 5);
-	// if (realloc((void *)addr + 5, 10) == NULL)
-	// 	print("Bonjours\n");
+	addr = malloc(16);
+	free(NULL);
+	free((void *)addr + 5);
+	if (realloc((void *)addr + 5, 10) == NULL)
+		print("Bonjours\n");
 }
