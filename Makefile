@@ -4,7 +4,7 @@ SRC_DIR=Source
 INCLUDE_DIRS=.
 BUILD_DIR=.build
 
-TESTS=test0 test1 test2 test3 test3++ test4 test5 dburgun
+TESTS=test0 test1 test2 test3 test4 test5 test6 dburgun
 SRC_FILES=malloc.c print.c
 DEP_FILES=$(addsuffix .d,$(SRC_FILES))
 OBJ_FILES=$(addsuffix .o,$(SRC_FILES))

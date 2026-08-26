@@ -2,8 +2,7 @@
 #include <unistd.h>
 #include <string.h>
 
-// What the fuck is this stupid test???
-// It's supposed to segfault, how the fuck do they expect me to check if the address is valid or not?
+#define M (1024 * 1024)
 
 void print(char *s)
 {
@@ -12,11 +11,20 @@ void print(char *s)
 
 int main()
 {
-	// char *addr;
+	char *addr1;
+	char *addr2;
+	char *addr3;
 
-	// addr = malloc(16);
-	// free(NULL);
-	// free((void *)addr + 5);
-	// if (realloc((void *)addr + 5, 10) == NULL)
-	// 	print("Bonjours\n");
+	addr1 = (char*)malloc(16*M);
+	strcpy(addr1, "Bonjours\n");
+	print(addr1);
+	addr2 = (char*)malloc(16*M);
+    (void)addr2;
+	addr3 = (char*)realloc(addr1, 128*M);
+	addr3[127*M] = 42;
+	print(addr3);
+
+	show_alloc_mem_better();
+
+	return (0);
 }
