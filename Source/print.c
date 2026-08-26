@@ -4,67 +4,6 @@
 #include <string.h>
 #include <unistd.h>
 
-/*
-void PrintBlockInfo(BlockHeader *block) {
-    printf("  Block: (%p) %p - %p, %u bytes\n", block, block + 1, (void *)(block + 1) + block->size, (uint32_t)block->size);
-}
-
-void PrintBucketInfo(Bucket *bucket) {
-    printf("Bucket: num_pages=%u, highest_available_size=%u\n", bucket->num_pages, bucket->highest_available_size);
-
-    BlockHeader *block = bucket->free_blocks;
-    printf(" Free blocks:\n");
-    while (block) {
-        PrintBlockInfo(block);
-        block = block->next;
-    }
-
-    block = bucket->occupied_blocks;
-    printf(" Occupied blocks:\n");
-    while(block) {
-        PrintBlockInfo(block);
-        block = block->next;
-    }
-}
-
-void PrintHeapInfo(Heap *heap) {
-    printf("\nFree tiny buckets:\n");
-    Bucket *bucket = heap->free_tiny_buckets;
-    while (bucket) {
-        PrintBucketInfo(bucket);
-        bucket = bucket->next;
-    }
-
-    printf("\nFull tiny buckets:\n");
-    bucket = heap->full_tiny_buckets;
-    while (bucket) {
-        PrintBucketInfo(bucket);
-        bucket = bucket->next;
-    }
-
-    printf("\nFree small buckets:\n");
-    bucket = heap->free_small_buckets;
-    while (bucket) {
-        PrintBucketInfo(bucket);
-        bucket = bucket->next;
-    }
-
-    printf("\nFull small buckets:\n");
-    bucket = heap->full_small_buckets;
-    while (bucket) {
-        PrintBucketInfo(bucket);
-        bucket = bucket->next;
-    }
-
-    printf("\nLarge allocations:\n");
-    BlockHeader *block = heap->large_allocations;
-    while (block) {
-        PrintBlockInfo(block);
-        block = block->next;
-    }
-}
-*/
-
 static
 void PrintString(const char *str) {
     write(1, str, strlen(str));
@@ -101,6 +40,113 @@ static
 void PrintPtr(void *ptr) {
     PrintString("0x");
     PrintSize((uintptr_t)ptr, 16);
+}
+
+static inline
+size_t GetPageSize() {
+    return sysconf(_SC_PAGESIZE);
+}
+
+static
+void PrintBlockInfo(BlockHeader *block) {
+    PrintString("  Block: (");
+    PrintPtr(block);
+    PrintString(") ");
+    PrintPtr(block + 1);
+    PrintString(" - ");
+    PrintPtr((void *)(block + 1) + block->size);
+    PrintString(", ");
+    PrintSize(block->size, 10);
+    PrintString(" bytes\n");
+}
+
+static
+void PrintBucketInfo(Bucket *bucket, size_t *total_allocated, size_t *total_available) {
+    PrintString("Bucket: num_pages=");
+    PrintSize(bucket->num_pages, 10);
+    PrintString(", highest_available_size=");
+    PrintSize(bucket->highest_available_size, 10);
+    PrintString("\n");
+
+    BlockHeader *block = bucket->free_blocks;
+    PrintString(" Free blocks:\n");
+    while (block) {
+        PrintBlockInfo(block);
+        *total_available += block->size;
+        block = block->next;
+    }
+
+    block = bucket->occupied_blocks;
+    PrintString(" Occupied blocks:\n");
+    while(block) {
+        PrintBlockInfo(block);
+        *total_allocated += block->size;
+        block = block->next;
+    }
+}
+
+static
+void PrintHeapInfo(Heap *heap) {
+    size_t total_available = 0;
+    size_t total_allocated = 0;
+    size_t num_pages = 0;
+
+    PrintString("\nTiny buckets:\n");
+    Bucket *bucket = heap->free_tiny_buckets;
+    while (bucket) {
+        PrintBucketInfo(bucket, &total_allocated, &total_available);
+        num_pages += bucket->num_pages;
+        bucket = bucket->next;
+    }
+
+    bucket = heap->full_tiny_buckets;
+    while (bucket) {
+        PrintBucketInfo(bucket, &total_allocated, &total_available);
+        num_pages += bucket->num_pages;
+        bucket = bucket->next;
+    }
+
+    PrintString("\nSmall buckets:\n");
+    bucket = heap->free_small_buckets;
+    while (bucket) {
+        PrintBucketInfo(bucket, &total_allocated, &total_available);
+        num_pages += bucket->num_pages;
+        bucket = bucket->next;
+    }
+
+    bucket = heap->full_small_buckets;
+    while (bucket) {
+        PrintBucketInfo(bucket, &total_allocated, &total_available);
+        num_pages += bucket->num_pages;
+        bucket = bucket->next;
+    }
+
+    PrintString("\nLarge allocations:\n");
+    BlockHeader *block = heap->large_allocations;
+    while (block) {
+        PrintBlockInfo(block);
+
+        total_allocated += block->size;
+
+        size_t total_block_size = block->size + sizeof(BlockHeader);
+        num_pages += total_block_size / GetPageSize();
+
+        block = block->next;
+    }
+
+    PrintString("\nTotal allocated: ");
+    PrintSize(total_allocated, 10);
+    PrintString(", available: ");
+    PrintSize(total_available, 10);
+    PrintString(", num pages: ");
+    PrintSize(num_pages, 10);
+    PrintString("\n");
+}
+
+void show_alloc_mem_better() {
+    pthread_mutex_lock(&g_heap_mutex);
+    PrintHeapInfo(&g_heap);
+    pthread_mutex_unlock(&g_heap_mutex);
 }
 
 static
@@ -218,6 +264,42 @@ static
 void PrintHeapInfoOrdered(Heap *heap) {
     size_t total = 0;
 
+    Bucket *bucket;
+
+    bucket = heap->free_tiny_buckets;
+    while (bucket) {
+        total += PrintBucketInfoOrdered(bucket);
+        bucket = bucket->next;
+    }
+    bucket = heap->full_tiny_buckets;
+    while (bucket) {
+        total += PrintBucketInfoOrdered(bucket);
+        bucket = bucket->next;
+    }
+
+    bucket = heap->free_small_buckets;
+    while (bucket) {
+        total += PrintBucketInfoOrdered(bucket);
+        bucket = bucket->next;
+    }
+    bucket = heap->full_small_buckets;
+    while (bucket) {
+        total += PrintBucketInfoOrdered(bucket);
+        bucket = bucket->next;
+    }
+
+    BlockHeader *block = heap->large_allocations;
+    while (block) {
+        PrintString("LARGE : ");
+        PrintPtr(block);
+        PrintString("\n");
+
+        total += PrintBlockInfoOrdered(block);
+        block = block->next;
+    }
+
+    /*
+
     bool is_bucket = false;
     void *curr = GetFirstBucketOrLargeBlock(heap, &is_bucket);
     while (curr) {
@@ -233,6 +315,7 @@ void PrintHeapInfoOrdered(Heap *heap) {
 
         curr = GetNextBucketOrLargeBlock(heap, curr, &is_bucket);
     }
+    */
 
     PrintString("Total : ");
     PrintSize(total, 10);
@@ -240,5 +323,7 @@ void PrintHeapInfoOrdered(Heap *heap) {
 }
 
 void show_alloc_mem() {
+    pthread_mutex_lock(&g_heap_mutex);
     PrintHeapInfoOrdered(&g_heap);
+    pthread_mutex_unlock(&g_heap_mutex);
 }

@@ -1,6 +1,4 @@
 #include <ft_malloc.h>
-#include "Source/ft_malloc_internal.h"
-
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdint.h>
@@ -11,8 +9,8 @@
 
 #define ALLOC_COUNT 1000
 #define REALLOC_COUNT 100
-#define TINY_ALLOC_MAX_SIZE FT_MALLOC_TINY_LIMIT
-#define SMALL_ALLOC_MAX_SIZE FT_MALLOC_SMALL_LIMIT
+#define TINY_ALLOC_MAX_SIZE 512
+#define SMALL_ALLOC_MAX_SIZE 4096
 #define LARGE_ALLOC_MAX_SIZE 100000
 
 typedef struct {
@@ -46,7 +44,7 @@ size_t next_alloc_size(void) {
 }
 
 void unoptimized_free(void* ptr) {
-    ft_free(ptr);
+    free(ptr);
 }
 
 int main(void) {
@@ -58,7 +56,7 @@ int main(void) {
         size_t size = next_alloc_size();
         allocations[i].size = size;
 
-        char* result = (char*)ft_malloc(size);
+        char* result = (char*)malloc(size);
         assert((size == 0 || result != NULL) && "Memory allocation failed");
 
         assert((uintptr_t)result % 16 == 0 && "Memory is not aligned to 16 bytes");
@@ -71,14 +69,14 @@ int main(void) {
         allocations[i].data = result;
     }
 
-    show_alloc_mem();
+    // show_alloc_mem();
 
     print("Reallocating\n");
     for (size_t n = 0; n < REALLOC_COUNT; ++n) {
         size_t i = rand() % ALLOC_COUNT;
 
         size_t new_size = next_alloc_size();
-        allocations[i].data = ft_realloc(allocations[i].data, new_size);
+        allocations[i].data = realloc(allocations[i].data, new_size);
         assert((new_size == 0 || allocations[i].data != NULL) && "Memory reallocation failed");
 
         assert((uintptr_t)allocations[i].data % 16 == 0 && "Memory is not aligned to 16 bytes");
@@ -100,7 +98,7 @@ int main(void) {
 
     unoptimized_free(NULL);
 
-    show_alloc_mem();
+    // show_alloc_mem();
 
     print("Checking content\n");
     for (size_t i = 0; i < ALLOC_COUNT; ++i) {
@@ -113,7 +111,7 @@ int main(void) {
     print("Freeing in random order\n");
     for (size_t len = ALLOC_COUNT; len > 0;) {
         size_t i = rand() % len;
-        ft_free(allocations[i].data);
+        free(allocations[i].data);
         allocations[i] = allocations[--len];
     }
 

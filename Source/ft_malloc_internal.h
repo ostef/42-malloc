@@ -3,8 +3,11 @@
 
 #include <ft_malloc.h>
 
+#include <pthread.h>
+
 #include <stdint.h>
 #include <stdbool.h>
+#include <stdlib.h>
 
 #define FT_Stringify(x) FT_Stringify2(x)
 #define FT_Stringify2(x) #x
@@ -26,7 +29,8 @@
 
 #ifdef FT_MALLOC_DEBUG_LOG
 #include <stdio.h>
-#define FT_DebugLog(...) printf(__VA_ARGS__)
+static char g_sprintf_buffer[6000];
+#define FT_DebugLog(...) do { int len = sprintf(g_sprintf_buffer, __VA_ARGS__); write(1, g_sprintf_buffer, len); } while(0)
 #else
 #define FT_DebugLog(...)
 #endif
@@ -87,5 +91,6 @@ typedef struct Heap {
 } Heap;
 
 extern Heap g_heap;
+extern pthread_mutex_t g_heap_mutex;
 
 #endif

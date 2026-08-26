@@ -6,6 +6,7 @@
 #include <sys/mman.h>
 
 Heap g_heap;
+pthread_mutex_t g_heap_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 static void ListNodePushFront(ListNode **list_front, ListNode *node);
 static void ListNodePushAfter(ListNode **list_front, ListNode *node, ListNode *after);
@@ -16,13 +17,13 @@ static void ListNodePop(ListNode **list_front, ListNode *node);
 #define ListPop(list, node) ListNodePop((ListNode **)list, (ListNode *)node)
 
 static Bucket *CreateBucket(uint32_t num_pages);
-// static void DestroyBucket(Bucket *bucket);
+static void DestroyBucket(Bucket *bucket);
 
 static Bucket *CreateTinyBucket(Heap *heap);
-// static void DestroyTinyBucket(Heap *heap, Bucket *bucket);
+static void DestroyTinyBucket(Heap *heap, Bucket *bucket);
 
 static Bucket *CreateSmallBucket(Heap *heap);
-// static void DestroySmallBucket(Heap *heap, Bucket *bucket);
+static void DestroySmallBucket(Heap *heap, Bucket *bucket);
 
 static Bucket *FindBucket(Bucket *list, size_t alloc_size);
 
@@ -37,16 +38,53 @@ static void *HeapAlloc(Heap *heap, size_t size);
 static void *HeapRealloc(Heap *heap, void *ptr, size_t new_size);
 static void HeapFree(Heap *heap, void *ptr);
 
+void *malloc(size_t size) {
+    return ft_malloc(size);
+}
+
+void *calloc(size_t num_elements, size_t element_size) {
+    return ft_calloc(num_elements, element_size);
+}
+
+void *realloc(void *ptr, size_t size) {
+    return ft_realloc(ptr, size);
+}
+
+void free(void *ptr) {
+    return ft_free(ptr);
+}
+
 void *ft_malloc(size_t size) {
-    return HeapAlloc(&g_heap, size);
+    pthread_mutex_lock(&g_heap_mutex);
+    void *ptr = HeapAlloc(&g_heap, size);
+    pthread_mutex_unlock(&g_heap_mutex);
+
+    return ptr;
+}
+
+void *ft_calloc(size_t num_elements, size_t element_size) {
+    void *ptr = ft_malloc(num_elements * element_size);
+    if (!ptr) {
+        return NULL;
+    }
+
+    memset(ptr, 0, num_elements * element_size);
+
+    return ptr;
 }
 
 void *ft_realloc(void *ptr, size_t size) {
-    return HeapRealloc(&g_heap, ptr, size);
+    pthread_mutex_lock(&g_heap_mutex);
+    void *result = HeapRealloc(&g_heap, ptr, size);
+    pthread_mutex_unlock(&g_heap_mutex);
+
+    return result;
 }
 
 void ft_free(void *ptr) {
+    pthread_mutex_lock(&g_heap_mutex);
     HeapFree(&g_heap, ptr);
+    pthread_mutex_unlock(&g_heap_mutex);
 }
 
 static inline
@@ -145,12 +183,7 @@ void ListNodePop(ListNode **list_front, ListNode *node) {
 
 static inline
 size_t GetPageSize() {
-    static size_t page_size;
-    if (page_size == 0) {
-        page_size = sysconf(_SC_PAGESIZE);
-    }
-
-    return page_size;
+    return sysconf(_SC_PAGESIZE);
 }
 
 static inline
@@ -183,10 +216,10 @@ Bucket *CreateBucket(uint32_t num_pages) {
     return bucket;
 }
 
-// void DestroyBucket(Bucket *bucket) {
-//     size_t total_size = bucket->num_pages * GetPageSize();
-//     munmap(bucket, total_size);
-// }
+void DestroyBucket(Bucket *bucket) {
+    size_t total_size = bucket->num_pages * GetPageSize();
+    munmap(bucket, total_size);
+}
 
 static inline
 Bucket *CreateBucketForMaxSize(uint32_t max_size, uint32_t num_min_blocks) {
@@ -210,12 +243,12 @@ Bucket *CreateTinyBucket(Heap *heap) {
     return bucket;
 }
 
-// void DestroyTinyBucket(Heap *heap, Bucket *bucket) {
-//     FT_DebugLog("Destroying tiny bucket\n");
+void DestroyTinyBucket(Heap *heap, Bucket *bucket) {
+    FT_DebugLog("Destroying tiny bucket\n");
 
-//     ListPop(&heap->free_tiny_buckets, bucket);
-//     DestroyBucket(bucket);
-// }
+    ListPop(&heap->free_tiny_buckets, bucket);
+    DestroyBucket(bucket);
+}
 
 Bucket *CreateSmallBucket(Heap *heap) {
     FT_DebugLog("Creating small bucket\n");
@@ -230,12 +263,12 @@ Bucket *CreateSmallBucket(Heap *heap) {
     return bucket;
 }
 
-// void DestroySmallBucket(Heap *heap, Bucket *bucket) {
-//     FT_DebugLog("Destroying small bucket\n");
+void DestroySmallBucket(Heap *heap, Bucket *bucket) {
+    FT_DebugLog("Destroying small bucket\n");
 
-//     ListPop(&heap->free_small_buckets, bucket);
-//     DestroyBucket(bucket);
-// }
+    ListPop(&heap->free_small_buckets, bucket);
+    DestroyBucket(bucket);
+}
 
 Bucket *FindBucket(Bucket *list, size_t alloc_size) {
     Bucket *bucket = list;
@@ -346,7 +379,7 @@ bool SplitBlockIfBigEnough(Bucket *bucket, BlockHeader *block, size_t size) {
         return false;
     }
 
-    FT_DebugLog("Splitting block, size is %lu bytes, requested %lu bytes\n", block->size, size);
+    FT_DebugLog("Splitting block %p, size is %lu bytes, requested %lu bytes\n", block, block->size, size);
 
     size_t original_block_size = block->size;
 
@@ -358,7 +391,7 @@ bool SplitBlockIfBigEnough(Bucket *bucket, BlockHeader *block, size_t size) {
 
     block->size = size;
 
-    FT_DebugLog("New block: %lu bytes\n", new_block->size);
+    FT_DebugLog("New block: %p, %lu bytes\n", new_block, new_block->size);
 
     ListPushAfter(&bucket->free_blocks, new_block, block);
 #ifdef VERIFY_LIST
@@ -441,6 +474,8 @@ bool ResizeAllocFromBucket(BlockHeader *block, size_t new_size) {
 }
 
 void *AllocLarge(Heap *heap, size_t size) {
+    FT_DebugLog("AllocLarge: %lu\n", size);
+
     FT_Assert(size % FT_MALLOC_ALIGNMENT == 0);
 
     size_t total_size = AlignForward(size + sizeof(BlockHeader), GetPageSize());
@@ -479,7 +514,9 @@ void *HeapAlloc(Heap *heap, size_t size) {
     size = AlignForward(size, FT_MALLOC_ALIGNMENT);
 
     if (size > FT_MALLOC_SMALL_LIMIT) {
-        return AllocLarge(heap, size);
+        void *result = AllocLarge(heap, size);
+        FT_DebugLog("  result=%p\n", result);
+        return result;
     }
 
     Bucket *bucket = NULL;
@@ -502,10 +539,14 @@ void *HeapAlloc(Heap *heap, size_t size) {
         ListPushFront(full_bucket_list, bucket);
     }
 
+    FT_DebugLog("  result=%p\n", result);
+
     return result;
 }
 
 void *HeapRealloc(Heap *heap, void *ptr, size_t new_size) {
+    FT_DebugLog("HeapRealloc: %p, %lu bytes\n", ptr, new_size);
+
     if (!ptr) {
         return HeapAlloc(heap, new_size);
     }
@@ -567,6 +608,16 @@ void HeapFree(Heap *heap, void *ptr) {
             } else {
                 ListPop(&heap->full_small_buckets, bucket);
                 ListPushFront(&heap->free_small_buckets, bucket);
+            }
+        }
+
+        // I wouldn't destroy buckets right away for efficiency but maybe
+        // the subject expects me to, so I'm not taking any risks here
+        if (bucket->num_allocations == 0) {
+            if (bucket->flags & Bucket_TinyFlag) {
+                DestroyTinyBucket(heap, bucket);
+            } else {
+                DestroySmallBucket(heap, bucket);
             }
         }
     } else {

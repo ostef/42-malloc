@@ -8,15 +8,18 @@
             "name": "Debug",
             "type": "cppdbg",
             "request": "launch",
-            "program": "${workspaceRoot}/dburgun",
-            "args": [],
+            "program": "/bin/sh",
+            "args": ["./run.sh", "/usr/bin/objdump", "-x", "libft_malloc.so"],
             "environment": [],
             "cwd": "${workspaceRoot}",
             "osx": {
                 "miDebuggerPath": "lldb"
             },
             "linux": {
-                "miDebuggerPath": "/usr/bin/gdb"
+                "miDebuggerPath": "/usr/bin/gdb",
+                "setupCommands": [
+                    {"text": "-gdb-set follow-fork-mode child"}
+                ]
             },
             "preLaunchTask": "Build"
         }
