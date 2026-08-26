@@ -87,6 +87,8 @@ void ft_free(void *ptr) {
     pthread_mutex_unlock(&g_heap_mutex);
 }
 
+#ifdef VERIFY_LIST
+
 static inline
 void VerifyList(ListNode *list) {
     while (list) {
@@ -100,6 +102,8 @@ void VerifyList(ListNode *list) {
         list = list->next;
     }
 }
+
+#endif
 
 void ListNodePushFront(ListNode **list_front, ListNode *node) {
     FT_Assert(node->prev == NULL);
