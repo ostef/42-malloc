@@ -35,8 +35,8 @@ static char g_sprintf_buffer[6000];
 #define FT_DebugLog(...)
 #endif
 
-#define FT_MALLOC_MIN_SIZE 16
-#define FT_MALLOC_ALIGNMENT 16
+#define FT_MALLOC_MIN_SIZE 32
+#define FT_MALLOC_ALIGNMENT 32
 
 #ifndef FT_MALLOC_MIN_BLOCKS
 #define FT_MALLOC_MIN_BLOCKS 100
@@ -79,6 +79,9 @@ typedef struct Bucket {
     uint32_t num_pages;
     uint32_t flags;
     uint32_t num_allocations;
+#if FT_MALLOC_ALIGNMENT == 32
+    uint64_t padding[2];
+#endif
 } Bucket;
 
 typedef struct Heap {

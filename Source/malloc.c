@@ -520,6 +520,8 @@ void *HeapAlloc(Heap *heap, size_t size) {
     if (size > FT_MALLOC_SMALL_LIMIT) {
         void *result = AllocLarge(heap, size);
         FT_DebugLog("  result=%p\n", result);
+        FT_Assert((uintptr_t)result % FT_MALLOC_ALIGNMENT == 0);
+
         return result;
     }
 
@@ -544,6 +546,7 @@ void *HeapAlloc(Heap *heap, size_t size) {
     }
 
     FT_DebugLog("  result=%p\n", result);
+    FT_Assert((uintptr_t)result % FT_MALLOC_ALIGNMENT == 0);
 
     return result;
 }
