@@ -1,3 +1,8 @@
+ifeq ($(HOSTTYPE),)
+	HOSTTYPE := $(shell uname -m)_$(shell uname -s)
+endif
+
+TARGET_HOSTTYPE=libft_malloc_$(HOSTTYPE).so
 TARGET=libft_malloc.so
 
 SRC_DIR=Source
@@ -16,14 +21,17 @@ CC=gcc
 C_FLAGS=-Wall -Wextra -Werror -g -Wno-unused-variable -Wno-unused-function
 DEFINES=FT_MALLOC_ENABLE_ASSERTS #FT_MALLOC_DEBUG_LOG #VERIFY_LIST
 
-all: $(TARGET) $(TEST_TARGET)
+all: $(TARGET)
 
 $(BUILD_DIR)/%.c.o: $(SRC_DIR)/%.c
 	@mkdir -p $(@D)
 	$(CC) $(C_FLAGS) -fPIC $(addprefix -D,$(DEFINES)) -MMD -MP -MF$(BUILD_DIR)/$*.c.d $(addprefix -I,$(INCLUDE_DIRS)) -c $< -o $@
 
-$(TARGET): $(addprefix $(BUILD_DIR)/,$(OBJ_FILES))
+$(TARGET_HOSTTYPE): $(addprefix $(BUILD_DIR)/,$(OBJ_FILES))
 	$(CC) -shared $(addprefix $(BUILD_DIR)/,$(OBJ_FILES)) $(addprefix -L,$(LIB_DIRS) $(LIB_DIRS)) $(addprefix -l,$(LIBS)) -o $@
+
+$(TARGET): $(TARGET_HOSTTYPE)
+	ln -s $< $@
 
 .PRECIOUS: Tests/%
 Tests/%: Tests/%.c $(TARGET)
