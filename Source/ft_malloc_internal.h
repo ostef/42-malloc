@@ -35,6 +35,10 @@ static char g_sprintf_buffer[6000];
 #define FT_DebugLog(...)
 #endif
 
+// Max alignment on AMD64 machines is 16 for scalar types
+// AVX-256 requires 32 byte alignment, AVX-512 requires 64 but we ain't gonna go that far!
+// It's basically free for us since allocation headers are 32 bytes
+// and making the buckets a multiple of 32 bytes only adds 16 bytes
 #define FT_MALLOC_MIN_SIZE 32
 #define FT_MALLOC_ALIGNMENT 32
 
