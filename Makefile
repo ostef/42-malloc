@@ -18,7 +18,7 @@ LIB_DIRS=
 LIBS=pthread
 
 CC=gcc
-C_FLAGS=-Wall -Wextra -Werror -g -Wno-unused-variable -Wno-unused-function
+C_FLAGS=-Wall -Wextra -Werror -Wno-unused-variable -Wno-unused-function -g
 DEFINES=FT_MALLOC_ENABLE_ASSERTS #FT_MALLOC_DEBUG_LOG #VERIFY_LIST
 
 all: $(TARGET)
@@ -51,5 +51,5 @@ fclean: clean
 
 re: | fclean all
 
-.PHONY: all clean fclean re
+.PHONY: all clean fclean re tests
 
