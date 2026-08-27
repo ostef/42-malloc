@@ -180,9 +180,7 @@ ListNode *GetNextNode(ListNode *first, void *block) {
     ListNode *next_block = NULL;
     ListNode *curr = first;
     while (curr) {
-        if ((uintptr_t)curr > (uintptr_t)block && !next_block) {
-            next_block = curr;
-        } else if ((uintptr_t)curr > (uintptr_t)block && (uintptr_t)curr < (uintptr_t)next_block) {
+        if ((uintptr_t)curr > (uintptr_t)block && (!next_block || (uintptr_t)curr < (uintptr_t)next_block)) {
             next_block = curr;
         }
 
@@ -221,20 +219,20 @@ void *GetFirstBucketOrLargeBlock(Heap *heap, bool *is_bucket) {
     void *c = GetFirstNode((ListNode *)heap->free_small_buckets);
     void *d = GetFirstNode((ListNode *)heap->full_small_buckets);
 
-    void *next = a;
-    next = b == NULL || next < b ? next : b;
-    next = c == NULL || next < c ? next : c;
-    next = d == NULL || next < d ? next : d;
+    void *first = a;
+    first = first != NULL && (b == NULL || first < b) ? first : b;
+    first = first != NULL && (c == NULL || first < c) ? first : c;
+    first = first != NULL && (d == NULL || first < d) ? first : d;
 
     void *e = GetFirstNode((ListNode *)heap->large_allocations);
-    if (e != NULL && e < next) {
+    if (first == NULL || (e != NULL && e < first)) {
         *is_bucket = false;
-        next = e;
+        first = e;
     } else {
-        *is_bucket = next != NULL;
+        *is_bucket = first != NULL;
     }
 
-    return next;
+    return first;
 }
 
 static
@@ -245,12 +243,12 @@ void *GetNextBucketOrLargeBlock(Heap *heap, void *ptr, bool *is_bucket) {
     void *d = GetNextNode((ListNode *)heap->full_small_buckets, ptr);
 
     void *next = a;
-    next = b == NULL || next < b ? next : b;
-    next = c == NULL || next < c ? next : c;
-    next = d == NULL || next < d ? next : d;
+    next = next != NULL && (b == NULL || next < b) ? next : b;
+    next = next != NULL && (c == NULL || next < c) ? next : c;
+    next = next != NULL && (d == NULL || next < d) ? next : d;
 
     void *e = GetNextNode((ListNode *)heap->large_allocations, ptr);
-    if (e != NULL && e < next) {
+    if (next == NULL || (e != NULL && e < next)) {
         *is_bucket = false;
         next = e;
     } else {
@@ -263,42 +261,6 @@ void *GetNextBucketOrLargeBlock(Heap *heap, void *ptr, bool *is_bucket) {
 static
 void PrintHeapInfoOrdered(Heap *heap) {
     size_t total = 0;
-
-    Bucket *bucket;
-
-    bucket = heap->free_tiny_buckets;
-    while (bucket) {
-        total += PrintBucketInfoOrdered(bucket);
-        bucket = bucket->next;
-    }
-    bucket = heap->full_tiny_buckets;
-    while (bucket) {
-        total += PrintBucketInfoOrdered(bucket);
-        bucket = bucket->next;
-    }
-
-    bucket = heap->free_small_buckets;
-    while (bucket) {
-        total += PrintBucketInfoOrdered(bucket);
-        bucket = bucket->next;
-    }
-    bucket = heap->full_small_buckets;
-    while (bucket) {
-        total += PrintBucketInfoOrdered(bucket);
-        bucket = bucket->next;
-    }
-
-    BlockHeader *block = heap->large_allocations;
-    while (block) {
-        PrintString("LARGE : ");
-        PrintPtr(block);
-        PrintString("\n");
-
-        total += PrintBlockInfoOrdered(block);
-        block = block->next;
-    }
-
-    /*
 
     bool is_bucket = false;
     void *curr = GetFirstBucketOrLargeBlock(heap, &is_bucket);
@@ -315,7 +277,6 @@ void PrintHeapInfoOrdered(Heap *heap) {
 
         curr = GetNextBucketOrLargeBlock(heap, curr, &is_bucket);
     }
-    */
 
     PrintString("Total : ");
     PrintSize(total, 10);
