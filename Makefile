@@ -31,7 +31,7 @@ $(TARGET_HOSTTYPE): $(addprefix $(BUILD_DIR)/,$(OBJ_FILES))
 	$(CC) -shared $(addprefix $(BUILD_DIR)/,$(OBJ_FILES)) $(addprefix -L,$(LIB_DIRS) $(LIB_DIRS)) $(addprefix -l,$(LIBS)) -o $@
 
 $(TARGET): $(TARGET_HOSTTYPE)
-	ln -s $< $@
+	ln -fs $< $@
 
 .PRECIOUS: Tests/%
 Tests/%: Tests/%.c $(TARGET)
